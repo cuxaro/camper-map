@@ -11,12 +11,14 @@ const CASTELLON_CENTER: [number, number] = [40.1428, -0.0899];
 const CASTELLON_ZOOM = 9;
 
 const LAYER_COLORS: Record<LayerId, string> = {
-  camping: "#22c55e",
-  rutas: "#f97316",
-  agua: "#38bdf8",
-  wikipedia: "#a855f7",
-  clima: "#facc15",
-  eventos: "#f43f5e",
+  camping:    "#22c55e",
+  rutas:      "#f97316",
+  agua:       "#38bdf8",
+  wikipedia:  "#a855f7",
+  clima:      "#facc15",
+  eventos:    "#f43f5e",
+  wc:         "#64748b",
+  biblioteca: "#7c3aed",
 };
 
 const CAMPING_EMOJI: Record<string, string> = {
@@ -49,7 +51,7 @@ function makeIcon(layerId: LayerId, props: Record<string, unknown>): L.DivIcon {
 
 const MIN_ZOOM = 9;
 
-function MapBoundsTracker({ onBoundsChange }: { onBoundsChange: (bbox: string) => void }) {
+function MapBoundsTracker({ onBoundsChange }: { onBoundsChange: (bbox: string, zoom: number) => void }) {
   const map = useMap();
   const cbRef = useRef(onBoundsChange);
   cbRef.current = onBoundsChange;
