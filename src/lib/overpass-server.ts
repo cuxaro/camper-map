@@ -215,6 +215,13 @@ async function fetchBiblioteca(): Promise<GeoJSON.FeatureCollection> {
 // ─── Wikipedia fetch ──────────────────────────────────────────────────────────
 
 const WIKI_BASE = "https://es.wikipedia.org/w/api.php";
+// The Wikipedia geosearch API rejects bounding boxes larger than ~0.2°x0.2°.
+// We tile the full Castellón bbox into 0.18° cells and query all tiles in parallel.
+const WIKI_TILE_DEG = 0.18;
+const CASTELLON_MIN_LAT = 39.7;
+const CASTELLON_MAX_LAT = 40.9;
+const CASTELLON_MIN_LON = -0.7;
+const CASTELLON_MAX_LON = 0.6;
 
 interface WikiGeoItem {
   pageid: number;
@@ -229,25 +236,55 @@ interface WikiPage {
   extract?: string;
 }
 
-async function fetchWikipedia(): Promise<GeoJSON.FeatureCollection> {
-  // Step 1: geosearch for all geolocated articles in Castellón bbox
-  // gsbbox format: maxlat|minlon|minlat|maxlon
-  const geoUrl = new URL(WIKI_BASE);
-  geoUrl.searchParams.set("action", "query");
-  geoUrl.searchParams.set("list", "geosearch");
-  geoUrl.searchParams.set("gsbbox", "40.9|-0.7|39.7|0.6");
-  geoUrl.searchParams.set("gslimit", "500");
-  geoUrl.searchParams.set("gsnamespace", "0");
-  geoUrl.searchParams.set("format", "json");
+async function fetchWikipediaTile(
+  minLat: number, minLon: number, maxLat: number, maxLon: number
+): Promise<WikiGeoItem[]> {
+  const url = new URL(WIKI_BASE);
+  url.searchParams.set("action", "query");
+  url.searchParams.set("list", "geosearch");
+  // gsbbox: maxlat|minlon|minlat|maxlon
+  url.searchParams.set("gsbbox", `${maxLat}|${minLon}|${minLat}|${maxLon}`);
+  url.searchParams.set("gslimit", "500");
+  url.searchParams.set("gsnamespace", "0");
+  url.searchParams.set("format", "json");
 
-  const geoRes = await fetch(geoUrl.toString());
-  if (!geoRes.ok) throw new Error(`Wikipedia geosearch HTTP ${geoRes.status}`);
-  const geoData = await geoRes.json() as { query?: { geosearch?: WikiGeoItem[] } };
-  const items: WikiGeoItem[] = geoData.query?.geosearch ?? [];
+  try {
+    const res = await fetch(url.toString());
+    if (!res.ok) return [];
+    const data = await res.json() as { query?: { geosearch?: WikiGeoItem[] } };
+    return data.query?.geosearch ?? [];
+  } catch {
+    return [];
+  }
+}
+
+async function fetchWikipedia(): Promise<GeoJSON.FeatureCollection> {
+  // Step 1: generate tile grid and fetch all tiles in parallel
+  const tilePromises: Promise<WikiGeoItem[]>[] = [];
+  for (let lat = CASTELLON_MIN_LAT; lat < CASTELLON_MAX_LAT; lat += WIKI_TILE_DEG) {
+    for (let lon = CASTELLON_MIN_LON; lon < CASTELLON_MAX_LON; lon += WIKI_TILE_DEG) {
+      const maxLat = Math.min(lat + WIKI_TILE_DEG, CASTELLON_MAX_LAT);
+      const maxLon = Math.min(lon + WIKI_TILE_DEG, CASTELLON_MAX_LON);
+      tilePromises.push(fetchWikipediaTile(lat, lon, maxLat, maxLon));
+    }
+  }
+  const tileResults = await Promise.all(tilePromises);
+
+  // Step 2: flatten and deduplicate by pageId
+  const seen = new Set<number>();
+  const items: WikiGeoItem[] = [];
+  for (const tile of tileResults) {
+    for (const item of tile) {
+      if (!seen.has(item.pageid)) {
+        seen.add(item.pageid);
+        items.push(item);
+      }
+    }
+  }
 
   if (items.length === 0) return EMPTY;
 
-  // Step 2: batch-fetch plain-text intro extracts (100 per call)
+  // Step 3: batch-fetch plain-text intro extracts (100 per call)
   const summaries = new Map<number, string>();
   for (let i = 0; i < items.length; i += 100) {
     const ids = items.slice(i, i + 100).map((p) => p.pageid).join("|");
@@ -273,7 +310,7 @@ async function fetchWikipedia(): Promise<GeoJSON.FeatureCollection> {
     }
   }
 
-  // Step 3: build GeoJSON
+  // Step 4: build GeoJSON
   const features: GeoJSON.Feature[] = items.map((item) => ({
     type: "Feature",
     id: item.pageid,
