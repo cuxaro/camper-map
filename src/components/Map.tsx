@@ -18,7 +18,6 @@ const LAYER_COLORS: Record<LayerId, string> = {
   clima:      "#facc15",
   eventos:    "#f43f5e",
   wc:         "#64748b",
-  biblioteca: "#7c3aed",
   ivan:       "#ef4444",
 };
 
@@ -40,7 +39,6 @@ function makeIcon(layerId: LayerId, props: Record<string, unknown>): L.DivIcon {
     case "eventos":    emoji = "🎉"; break;
     case "wikipedia":  emoji = "📖"; break;
     case "wc":         emoji = "🚽"; break;
-    case "biblioteca": emoji = "📚"; break;
     case "ivan":       emoji = props.type === "cementerio" ? "🪦" : "📚"; break;
     default: emoji = "📍";
   }
@@ -83,7 +81,7 @@ function LocateButton() {
 }
 
 const EMPTY_FC: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
-const POINT_LAYERS: LayerId[] = ["camping", "agua", "eventos", "wikipedia", "wc", "biblioteca", "ivan"];
+const POINT_LAYERS: LayerId[] = ["camping", "agua", "eventos", "wikipedia", "wc", "ivan"];
 
 export type MapData = Partial<Record<LayerId, GeoJSON.FeatureCollection>>;
 

@@ -233,7 +233,6 @@ const LAYER_ICON: Record<LayerId, string> = {
   eventos: "🎉",
   clima: "🌤",
   wc: "🚽",
-  biblioteca: "📚",
   ivan: "🎯",
 };
 

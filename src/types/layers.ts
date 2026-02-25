@@ -6,7 +6,6 @@ export type LayerId =
   | "eventos"
   | "agua"
   | "wc"
-  | "biblioteca"
   | "ivan";
 
 export interface Layer {
@@ -90,16 +89,6 @@ export const LAYERS: Layer[] = [
     description: "Servicios higiénicos públicos",
     icon: "🚽",
     color: "#64748b",
-    enabled: false,
-    implemented: true,
-    source: "OpenStreetMap",
-  },
-  {
-    id: "biblioteca",
-    label: "Bibliotecas",
-    description: "Bibliotecas públicas",
-    icon: "📚",
-    color: "#7c3aed",
     enabled: false,
     implemented: true,
     source: "OpenStreetMap",

@@ -194,23 +194,6 @@ async function fetchWC(): Promise<GeoJSON.FeatureCollection> {
   }));
 }
 
-async function fetchBiblioteca(): Promise<GeoJSON.FeatureCollection> {
-  const bbox = CASTELLON_BBOX;
-  const ql = `
-    [out:json][timeout:25];
-    (
-      node["amenity"="library"](${bbox});
-      way["amenity"="library"](${bbox});
-    );
-    out body center;
-  `;
-  const raw = await runQuery(ql);
-  return elementsToPoints(raw.elements, "biblioteca", (el) => ({
-    opening_hours: el.tags?.opening_hours ?? "",
-    website: el.tags?.website ?? el.tags?.url ?? "",
-    wifi: el.tags?.["internet_access"] === "wlan" || el.tags?.["internet_access"] === "yes",
-  }));
-}
 
 // ─── Ivan fetch ───────────────────────────────────────────────────────────────
 
@@ -357,7 +340,7 @@ async function fetchWikipedia(): Promise<GeoJSON.FeatureCollection> {
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
-export const FUNCTIONAL_LAYER_IDS: LayerId[] = ["camping", "agua", "rutas", "wc", "biblioteca", "wikipedia", "ivan"];
+export const FUNCTIONAL_LAYER_IDS: LayerId[] = ["camping", "agua", "rutas", "wc", "wikipedia", "ivan"];
 
 export async function fetchLayerFromOverpass(layerId: LayerId): Promise<LayerResponse> {
   let data: GeoJSON.FeatureCollection;
@@ -367,7 +350,6 @@ export async function fetchLayerFromOverpass(layerId: LayerId): Promise<LayerRes
     case "agua":       data = await fetchAgua(); break;
     case "rutas":      data = await fetchRutas(); break;
     case "wc":         data = await fetchWC(); break;
-    case "biblioteca": data = await fetchBiblioteca(); break;
     case "wikipedia":  data = await fetchWikipedia(); break;
     case "ivan":       data = await fetchIvan(); break;
     default:
