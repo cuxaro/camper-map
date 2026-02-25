@@ -12,6 +12,7 @@ import type { LayerId } from "@/types/layers";
 import { LAYERS } from "@/types/layers";
 import { FUNCTIONAL_LAYER_IDS } from "@/lib/overpass-server";
 import type { MapData } from "@/components/Map";
+import type { RepoMeta } from "@/app/api/repos/upload/route";
 
 const Map = dynamic(() => import("@/components/Map"), { ssr: false });
 
@@ -19,7 +20,8 @@ export type LayerCacheInfo = Partial<Record<LayerId, CacheInfo>>;
 
 export default function HomePage() {
   const { enabledLayers, toggleLayer } = usePersistedLayers();
-  const { activeRepos } = useActiveRepos();
+  const { activeRepos, toggleRepo } = useActiveRepos();
+  const [repoMetas, setRepoMetas] = useState<RepoMeta[]>([]);
   const [layerPanelOpen, setLayerPanelOpen] = useState(false);
   const [selectedFeature, setSelectedFeature] = useState<GeoJSON.Feature | null>(null);
   const [data, setData] = useState<MapData>({
@@ -48,6 +50,14 @@ export default function HomePage() {
     setData((prev) => ({ ...prev, [id]: fc }));
     setCacheInfo((prev) => ({ ...prev, [id]: info }));
     setLoadingLayers((prev) => { const n = new Set(prev); n.delete(id); return n; });
+  }, []);
+
+  // Load repo metadata list on mount
+  useEffect(() => {
+    fetch("/api/repos/list")
+      .then((r) => r.json())
+      .then((d) => setRepoMetas(d as RepoMeta[]))
+      .catch(() => {});
   }, []);
 
   // Load all functional layers on mount
@@ -166,7 +176,11 @@ export default function HomePage() {
         errorLayers={errorLayers}
         cacheInfo={cacheInfo}
         data={data}
+        repoMetas={repoMetas}
+        activeRepos={activeRepos}
+        repoDatas={repoDatas}
         onToggle={toggleLayer}
+        onToggleRepo={toggleRepo}
         onRefresh={handleRefresh}
         onClose={() => setLayerPanelOpen(false)}
       />

@@ -5,6 +5,7 @@ import { LAYERS, LAYER_GROUPS } from "@/types/layers";
 import type { LayerId } from "@/types/layers";
 import type { CacheInfo } from "@/lib/overpass";
 import type { MapData } from "@/components/Map";
+import type { RepoMeta } from "@/app/api/repos/upload/route";
 
 interface LayerPanelProps {
   open: boolean;
@@ -13,7 +14,11 @@ interface LayerPanelProps {
   errorLayers: Set<LayerId>;
   cacheInfo: Partial<Record<LayerId, CacheInfo>>;
   data: MapData;
+  repoMetas?: RepoMeta[];
+  activeRepos?: string[];
+  repoDatas?: Record<string, GeoJSON.FeatureCollection>;
   onToggle: (id: LayerId) => void;
+  onToggleRepo?: (id: string) => void;
   onRefresh: (id?: LayerId) => void;
   onClose: () => void;
 }
@@ -44,7 +49,11 @@ export default function LayerPanel({
   errorLayers,
   cacheInfo,
   data,
+  repoMetas = [],
+  activeRepos = [],
+  repoDatas = {},
   onToggle,
+  onToggleRepo,
   onRefresh,
   onClose,
 }: LayerPanelProps) {
@@ -170,17 +179,49 @@ export default function LayerPanel({
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide px-4 pt-3 pb-1">
               Mis capas
             </p>
+
+            {repoMetas.length === 0 ? (
+              <p className="text-xs text-gray-400 px-4 pb-3">Sin capas subidas aún</p>
+            ) : (
+              repoMetas.map((repo) => {
+                const active = activeRepos.includes(repo.id);
+                const count = repoDatas[repo.id]?.features.length ?? repo.count;
+                return (
+                  <div key={repo.id} className={`flex items-start gap-3 px-4 py-3 ${active ? "bg-gray-50" : ""}`}>
+                    <button
+                      onClick={() => onToggleRepo?.(repo.id)}
+                      className="flex items-start gap-3 flex-1 min-w-0 text-left"
+                    >
+                      <div className="relative mt-0.5 shrink-0">
+                        <span className="text-xl">📁</span>
+                        <span
+                          className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border border-white transition-opacity ${active ? "opacity-100" : "opacity-30"}`}
+                          style={{ backgroundColor: "#6366f1" }}
+                        />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className={`font-medium text-sm truncate ${active ? "text-gray-900" : "text-gray-500"}`}>
+                            {repo.name}
+                          </span>
+                          <div className={`shrink-0 w-9 h-5 rounded-full transition-colors ${active ? "bg-indigo-500" : "bg-gray-200"}`}>
+                            <div className={`w-4 h-4 bg-white rounded-full shadow mt-0.5 transform transition-transform ${active ? "translate-x-4" : "translate-x-0.5"}`} />
+                          </div>
+                        </div>
+                        <p className="text-xs text-gray-400 mt-0.5">{count} elementos · {repo.author}</p>
+                      </div>
+                    </button>
+                  </div>
+                );
+              })
+            )}
+
             <Link
               href="/repositorio"
               onClick={onClose}
-              className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors"
+              className="flex items-center gap-2 px-4 py-2 text-xs text-indigo-600 font-medium hover:text-indigo-800 transition-colors"
             >
-              <span className="text-xl">📁</span>
-              <div className="flex-1 min-w-0">
-                <span className="font-medium text-sm text-gray-700">Repositorio de capas</span>
-                <p className="text-xs text-gray-400 mt-0.5 leading-tight">Sube y gestiona tus CSV personalizados</p>
-              </div>
-              <span className="text-gray-400 text-sm">→</span>
+              ＋ Gestionar capas →
             </Link>
           </div>
 
