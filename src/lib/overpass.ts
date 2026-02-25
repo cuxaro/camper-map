@@ -272,8 +272,10 @@ export async function fetchRutas(force = false): Promise<{ data: GeoJSON.Feature
     const ql = `
       [out:json][timeout:30];
       (
-        way["highway"~"path|footway"]["sac_scale"](${BBOX});
-        way["highway"="track"]["trail_visibility"~"excellent|good"](${BBOX});
+        way["highway"="path"](${BBOX});
+        way["highway"="footway"]["area"!="yes"](${BBOX});
+        way["highway"="track"](${BBOX});
+        way["highway"="bridleway"](${BBOX});
       );
       out body geom;
     `;
@@ -281,7 +283,7 @@ export async function fetchRutas(force = false): Promise<{ data: GeoJSON.Feature
     const raw = await runQuery(ql);
     const data = elementsToLines(raw.elements, "rutas");
 
-    writeCache("rutas", data);
+    if (data.features.length > 0) writeCache("rutas", data);
     return { data, info: { cachedAt: Date.now(), count: data.features.length, fresh: true } };
   } catch (err) {
     console.error("Overpass rutas:", err);
