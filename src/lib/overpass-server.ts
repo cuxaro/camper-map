@@ -212,6 +212,34 @@ async function fetchBiblioteca(): Promise<GeoJSON.FeatureCollection> {
   }));
 }
 
+// ─── Ivan fetch ───────────────────────────────────────────────────────────────
+
+async function fetchIvan(): Promise<GeoJSON.FeatureCollection> {
+  const bbox = CASTELLON_BBOX;
+  const ql = `
+    [out:json][timeout:30];
+    (
+      node["landuse"="cemetery"](${bbox});
+      way["landuse"="cemetery"](${bbox});
+      node["amenity"="grave_yard"](${bbox});
+      way["amenity"="grave_yard"](${bbox});
+      node["amenity"="library"](${bbox});
+      way["amenity"="library"](${bbox});
+    );
+    out body center;
+  `;
+  const raw = await runQuery(ql);
+  return elementsToPoints(raw.elements, "ivan", (el) => {
+    const isCemetery = el.tags?.landuse === "cemetery" || el.tags?.amenity === "grave_yard";
+    return {
+      type: isCemetery ? "cementerio" : "biblioteca",
+      opening_hours: el.tags?.opening_hours ?? "",
+      website: el.tags?.website ?? el.tags?.url ?? "",
+      wifi: el.tags?.["internet_access"] === "wlan" || el.tags?.["internet_access"] === "yes",
+    };
+  });
+}
+
 // ─── Wikipedia fetch ──────────────────────────────────────────────────────────
 
 const WIKI_BASE = "https://es.wikipedia.org/w/api.php";
@@ -329,7 +357,7 @@ async function fetchWikipedia(): Promise<GeoJSON.FeatureCollection> {
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
-export const FUNCTIONAL_LAYER_IDS: LayerId[] = ["camping", "agua", "rutas", "wc", "biblioteca", "wikipedia"];
+export const FUNCTIONAL_LAYER_IDS: LayerId[] = ["camping", "agua", "rutas", "wc", "biblioteca", "wikipedia", "ivan"];
 
 export async function fetchLayerFromOverpass(layerId: LayerId): Promise<LayerResponse> {
   let data: GeoJSON.FeatureCollection;
@@ -341,6 +369,7 @@ export async function fetchLayerFromOverpass(layerId: LayerId): Promise<LayerRes
     case "wc":         data = await fetchWC(); break;
     case "biblioteca": data = await fetchBiblioteca(); break;
     case "wikipedia":  data = await fetchWikipedia(); break;
+    case "ivan":       data = await fetchIvan(); break;
     default:
       data = EMPTY;
   }

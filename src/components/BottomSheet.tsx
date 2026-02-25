@@ -174,6 +174,31 @@ function WikipediaDetail({ props }: { props: Props }) {
   );
 }
 
+function IvanDetail({ props }: { props: Props }) {
+  const isCemetery = props.type === "cementerio";
+  return (
+    <div className="space-y-3">
+      <div className="flex gap-2 flex-wrap">
+        <Tag color={isCemetery ? "gray" : "blue"}>
+          {isCemetery ? "🪦 Cementerio" : "📚 Biblioteca"}
+        </Tag>
+        {isCemetery && <Tag color="green">🅿️ Parking habitual</Tag>}
+        {!isCemetery && !!props.wifi && <Tag color="blue">📶 WiFi</Tag>}
+      </div>
+      {!!props.opening_hours && (
+        <p className="text-sm text-gray-500">🕐 {String(props.opening_hours)}</p>
+      )}
+      {!!props.website && (
+        <a href={String(props.website)} target="_blank" rel="noopener noreferrer"
+          className="text-sm text-red-600 font-medium">
+          🌐 Web →
+        </a>
+      )}
+      <OsmLink osmId={String(props._osmId ?? "")} />
+    </div>
+  );
+}
+
 function EventoDetail({ props }: { props: Props }) {
   const catLabel: Record<string, string> = {
     fiesta: "🎊 Fiesta local",
@@ -209,6 +234,7 @@ const LAYER_ICON: Record<LayerId, string> = {
   clima: "🌤",
   wc: "🚽",
   biblioteca: "📚",
+  ivan: "🎯",
 };
 
 // ─── Main component ───────────────────────────────────────────────────────────
@@ -258,6 +284,7 @@ export default function BottomSheet({ feature, onClose }: BottomSheetProps) {
           {layerId === "agua" && <AguaDetail props={props} />}
           {layerId === "rutas" && <RutaDetail props={props} />}
           {layerId === "wikipedia" && <WikipediaDetail props={props} />}
+          {layerId === "ivan" && <IvanDetail props={props} />}
           {layerId === "eventos" && <EventoDetail props={props} />}
         </div>
       </div>
