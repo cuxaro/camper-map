@@ -53,10 +53,10 @@ export default function LayerPanel({
 
   return (
     <>
-      {open && <div className="fixed inset-0 bg-black/40 z-20" onClick={onClose} />}
+      {open && <div className="fixed inset-0 bg-black/40 z-[1001]" onClick={onClose} />}
 
       <div
-        className={`fixed top-0 right-0 h-full w-72 bg-white z-30 shadow-2xl transform transition-transform duration-300 ease-in-out flex flex-col ${
+        className={`fixed top-0 right-0 h-full w-72 bg-white z-[1002] shadow-2xl transform transition-transform duration-300 ease-in-out flex flex-col ${
           open ? "translate-x-0" : "translate-x-full"
         }`}
       >

@@ -226,9 +226,9 @@ export default function BottomSheet({ feature, onClose }: BottomSheetProps) {
 
   return (
     <>
-      <div className="fixed inset-0 z-10" onClick={onClose} />
+      <div className="fixed inset-0 z-[1001]" onClick={onClose} />
 
-      <div className="fixed bottom-0 left-0 right-0 z-20 bg-white rounded-t-2xl shadow-2xl max-h-[65vh] flex flex-col animate-slide-up">
+      <div className="fixed bottom-0 left-0 right-0 z-[1002] bg-white rounded-t-2xl shadow-2xl max-h-[65vh] flex flex-col animate-slide-up">
         {/* Handle */}
         <div className="flex justify-center pt-3 pb-1 shrink-0">
           <div className="w-10 h-1 bg-gray-200 rounded-full" />

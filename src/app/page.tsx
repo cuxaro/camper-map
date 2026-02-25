@@ -83,7 +83,7 @@ export default function HomePage() {
   return (
     <div className="fixed inset-0 flex flex-col bg-gray-900">
       {/* Top bar */}
-      <header className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-3 pt-3 pointer-events-none">
+      <header className="absolute top-0 left-0 right-0 z-[1000] flex items-center justify-between px-3 pt-3 pointer-events-none">
         <div className="pointer-events-auto bg-white/95 backdrop-blur rounded-xl px-3 py-2 shadow-lg flex items-center gap-2">
           <span className="text-lg">🏕</span>
           <span className="font-bold text-gray-900 text-sm tracking-tight">CamperMap</span>
@@ -109,7 +109,7 @@ export default function HomePage() {
 
       {/* Global loading indicator */}
       {isAnyLoading && (
-        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
+        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-[1000] pointer-events-none">
           <div className="bg-white/95 backdrop-blur rounded-full px-3 py-1.5 shadow-lg flex items-center gap-2">
             <svg className="w-3 h-3 animate-spin text-green-500" viewBox="0 0 24 24" fill="none">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
@@ -122,7 +122,7 @@ export default function HomePage() {
 
       {/* Legend pills */}
       {!selectedFeature && activeLayers.length > 0 && (
-        <div className="absolute bottom-6 left-3 flex flex-col gap-1.5 pointer-events-none z-10">
+        <div className="absolute bottom-6 left-3 flex flex-col gap-1.5 pointer-events-none z-[1000]">
           {activeLayers.map((layer) => (
             <div key={layer.id} className="flex items-center gap-1.5 bg-white/90 backdrop-blur rounded-full px-2 py-1 shadow text-xs font-medium text-gray-700">
               <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: layer.color }} />
