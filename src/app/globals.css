@@ -1,5 +1,4 @@
 @import "tailwindcss";
-@import "maplibre-gl/dist/maplibre-gl.css";
 
 html,
 body {
@@ -22,7 +21,7 @@ body {
   animation: slide-up 0.25s ease-out;
 }
 
-/* MapLibre controls position fix for mobile */
-.maplibregl-ctrl-bottom-right {
+/* Leaflet controls position fix for mobile */
+.leaflet-bottom.leaflet-right {
   bottom: 80px !important;
 }
