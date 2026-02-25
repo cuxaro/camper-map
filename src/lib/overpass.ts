@@ -288,3 +288,59 @@ export async function fetchRutas(bbox: string, force = false): Promise<{ data: G
     return { data: EMPTY, info: { cachedAt: Date.now(), count: 0, fresh: true } };
   }
 }
+
+export async function fetchWC(bbox: string, force = false): Promise<{ data: GeoJSON.FeatureCollection; info: CacheInfo }> {
+  if (!force) {
+    const cached = readCache("wc", bbox);
+    if (cached) return { data: cached.data, info: { ...cached, fresh: false } };
+  }
+  try {
+    const ql = `
+      [out:json][timeout:25];
+      (
+        node["amenity"="toilets"](${bbox});
+        way["amenity"="toilets"](${bbox});
+      );
+      out body center;
+    `;
+    const raw = await runQuery(ql);
+    const data = elementsToPoints(raw.elements, "wc", (el) => ({
+      fee: el.tags?.fee === "yes",
+      access: el.tags?.access ?? "public",
+      opening_hours: el.tags?.opening_hours ?? "",
+    }));
+    if (data.features.length > 0) writeCache("wc", data, bbox);
+    return { data, info: { cachedAt: Date.now(), count: data.features.length, fresh: true } };
+  } catch (err) {
+    console.error("Overpass wc:", err);
+    return { data: EMPTY, info: { cachedAt: Date.now(), count: 0, fresh: true } };
+  }
+}
+
+export async function fetchBiblioteca(bbox: string, force = false): Promise<{ data: GeoJSON.FeatureCollection; info: CacheInfo }> {
+  if (!force) {
+    const cached = readCache("biblioteca", bbox);
+    if (cached) return { data: cached.data, info: { ...cached, fresh: false } };
+  }
+  try {
+    const ql = `
+      [out:json][timeout:25];
+      (
+        node["amenity"="library"](${bbox});
+        way["amenity"="library"](${bbox});
+      );
+      out body center;
+    `;
+    const raw = await runQuery(ql);
+    const data = elementsToPoints(raw.elements, "biblioteca", (el) => ({
+      opening_hours: el.tags?.opening_hours ?? "",
+      website: el.tags?.website ?? el.tags?.url ?? "",
+      wifi: el.tags?.["internet_access"] === "wlan" || el.tags?.["internet_access"] === "yes",
+    }));
+    if (data.features.length > 0) writeCache("biblioteca", data, bbox);
+    return { data, info: { cachedAt: Date.now(), count: data.features.length, fresh: true } };
+  } catch (err) {
+    console.error("Overpass biblioteca:", err);
+    return { data: EMPTY, info: { cachedAt: Date.now(), count: 0, fresh: true } };
+  }
+}

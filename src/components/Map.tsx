@@ -32,9 +32,11 @@ function makeIcon(layerId: LayerId, props: Record<string, unknown>): L.DivIcon {
   let emoji: string;
   switch (layerId) {
     case "camping": emoji = CAMPING_EMOJI[String(props.type ?? "")] ?? "⛺"; break;
-    case "agua":    emoji = props.potable ? "💧" : "🚱"; break;
-    case "eventos": emoji = "🎉"; break;
-    case "wikipedia": emoji = "📖"; break;
+    case "agua":       emoji = props.potable ? "💧" : "🚱"; break;
+    case "eventos":    emoji = "🎉"; break;
+    case "wikipedia":  emoji = "📖"; break;
+    case "wc":         emoji = "🚽"; break;
+    case "biblioteca": emoji = "📚"; break;
     default: emoji = "📍";
   }
   return L.divIcon({
@@ -51,9 +53,11 @@ function MapBoundsTracker({ onBoundsChange }: { onBoundsChange: (bbox: string) =
   const map = useMap();
   const cbRef = useRef(onBoundsChange);
   cbRef.current = onBoundsChange;
+  const lastBboxRef = useRef<string>("");
 
   const fire = useCallback(() => {
-    if (map.getZoom() < MIN_ZOOM) return;
+    const zoom = map.getZoom();
+    if (zoom < MIN_ZOOM) return;
     const b = map.getBounds();
     const bbox = [
       b.getSouth().toFixed(2),
@@ -61,11 +65,15 @@ function MapBoundsTracker({ onBoundsChange }: { onBoundsChange: (bbox: string) =
       b.getNorth().toFixed(2),
       b.getEast().toFixed(2),
     ].join(",");
-    cbRef.current(bbox);
+    if (bbox === lastBboxRef.current) return; // sin cambio, no refetch
+    lastBboxRef.current = bbox;
+    cbRef.current(bbox, zoom);
   }, [map]);
 
+  // dragend = solo cuando el usuario arrastra (no en movimientos del clustering)
+  // zoomend = cuando el usuario hace zoom (scroll, botones, doble clic)
   useEffect(() => { fire(); }, [fire]);
-  useMapEvents({ moveend: fire, zoomend: fire });
+  useMapEvents({ dragend: fire, zoomend: fire });
 
   return null;
 }
@@ -101,7 +109,7 @@ function LocateButton() {
 }
 
 const EMPTY_FC: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
-const POINT_LAYERS: LayerId[] = ["camping", "agua", "eventos", "wikipedia"];
+const POINT_LAYERS: LayerId[] = ["camping", "agua", "eventos", "wikipedia", "wc", "biblioteca"];
 
 export type MapData = Partial<Record<LayerId, GeoJSON.FeatureCollection>>;
 
@@ -109,7 +117,7 @@ interface MapProps {
   enabledLayers: Set<LayerId>;
   data: MapData;
   onFeatureClick: (feature: GeoJSON.Feature) => void;
-  onBoundsChange: (bbox: string) => void;
+  onBoundsChange: (bbox: string, zoom: number) => void;
 }
 
 export default function Map({ enabledLayers, data, onFeatureClick, onBoundsChange }: MapProps) {

@@ -4,7 +4,9 @@ export type LayerId =
   | "wikipedia"
   | "clima"
   | "eventos"
-  | "agua";
+  | "agua"
+  | "wc"
+  | "biblioteca";
 
 export interface Layer {
   id: LayerId;
@@ -81,5 +83,25 @@ export const LAYERS: Layer[] = [
     implemented: false,
     source: "Mock data",
     comingSoon: "Sprint 4",
+  },
+  {
+    id: "wc",
+    label: "WC Públicos",
+    description: "Servicios higiénicos públicos",
+    icon: "🚽",
+    color: "#64748b",
+    enabled: false,
+    implemented: true,
+    source: "OpenStreetMap",
+  },
+  {
+    id: "biblioteca",
+    label: "Bibliotecas",
+    description: "Bibliotecas públicas",
+    icon: "📚",
+    color: "#7c3aed",
+    enabled: false,
+    implemented: true,
+    source: "OpenStreetMap",
   },
 ];
