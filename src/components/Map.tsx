@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState } from "react";
 import { MapContainer, TileLayer, Marker, GeoJSON, ZoomControl, useMap, useMapEvents } from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-cluster";
 import L from "leaflet";
@@ -50,37 +50,6 @@ function makeIcon(layerId: LayerId, props: Record<string, unknown>): L.DivIcon {
   });
 }
 
-const MIN_ZOOM = 9;
-
-function MapBoundsTracker({ onBoundsChange }: { onBoundsChange: (bbox: string, zoom: number) => void }) {
-  const map = useMap();
-  const cbRef = useRef(onBoundsChange);
-  cbRef.current = onBoundsChange;
-  const lastBboxRef = useRef<string>("");
-
-  const fire = useCallback(() => {
-    const zoom = map.getZoom();
-    if (zoom < MIN_ZOOM) return;
-    const b = map.getBounds();
-    const bbox = [
-      b.getSouth().toFixed(2),
-      b.getWest().toFixed(2),
-      b.getNorth().toFixed(2),
-      b.getEast().toFixed(2),
-    ].join(",");
-    if (bbox === lastBboxRef.current) return; // sin cambio, no refetch
-    lastBboxRef.current = bbox;
-    cbRef.current(bbox, zoom);
-  }, [map]);
-
-  // dragend = solo cuando el usuario arrastra (no en movimientos del clustering)
-  // zoomend = cuando el usuario hace zoom (scroll, botones, doble clic)
-  useEffect(() => { fire(); }, [fire]);
-  useMapEvents({ dragend: fire, zoomend: fire });
-
-  return null;
-}
-
 function LocateButton() {
   const map = useMap();
   const [locating, setLocating] = useState(false);
@@ -121,10 +90,9 @@ interface MapProps {
   data: MapData;
   selectedFeature: GeoJSON.Feature | null;
   onFeatureClick: (feature: GeoJSON.Feature) => void;
-  onBoundsChange: (bbox: string, zoom: number) => void;
 }
 
-export default function Map({ enabledLayers, data, selectedFeature, onFeatureClick, onBoundsChange }: MapProps) {
+export default function Map({ enabledLayers, data, selectedFeature, onFeatureClick }: MapProps) {
   return (
     <MapContainer
       center={CASTELLON_CENTER}
@@ -138,7 +106,6 @@ export default function Map({ enabledLayers, data, selectedFeature, onFeatureCli
       />
       <ZoomControl position="bottomright" />
       <LocateButton />
-      <MapBoundsTracker onBoundsChange={onBoundsChange} />
 
       {/* Point layers with clustering */}
       {POINT_LAYERS.map((id) => {

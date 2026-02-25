@@ -1,14 +1,15 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useEffect } from "react";
 import dynamic from "next/dynamic";
 import LayerPanel from "@/components/LayerPanel";
 import BottomSheet from "@/components/BottomSheet";
 import { usePersistedLayers } from "@/hooks/usePersistedLayers";
-import { fetchCamping, fetchAgua, fetchRutas, fetchWC, fetchBiblioteca, type CacheInfo } from "@/lib/overpass";
+import { fetchLayer, type CacheInfo } from "@/lib/overpass";
 import { eventosData, wikipediaData } from "@/data/mock";
 import type { LayerId } from "@/types/layers";
 import { LAYERS } from "@/types/layers";
+import { FUNCTIONAL_LAYER_IDS } from "@/lib/overpass-server";
 import type { MapData } from "@/components/Map";
 
 const Map = dynamic(() => import("@/components/Map"), { ssr: false });
@@ -26,9 +27,6 @@ export default function HomePage() {
   const [loadingLayers, setLoadingLayers] = useState<Set<LayerId>>(new Set());
   const [errorLayers, setErrorLayers] = useState<Set<LayerId>>(new Set());
   const [cacheInfo, setCacheInfo] = useState<LayerCacheInfo>({});
-
-  const currentBboxRef = useRef<string>("");
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Generic loader — force=true bypasses cache
   const loadLayer = useCallback(async (
@@ -50,41 +48,22 @@ export default function HomePage() {
     setLoadingLayers((prev) => { const n = new Set(prev); n.delete(id); return n; });
   }, []);
 
-  // Fired by MapBoundsTracker when the map stops moving
-  // zoom is passed so we can skip heavy queries at low zoom levels
-  const handleBoundsChange = useCallback((bbox: string, zoom: number) => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      currentBboxRef.current = bbox;
-      loadLayer("camping",    (force) => fetchCamping(bbox, force));
-      loadLayer("agua",       (force) => fetchAgua(bbox, force));
-      loadLayer("wc",         (force) => fetchWC(bbox, force));
-      loadLayer("biblioteca", (force) => fetchBiblioteca(bbox, force));
-      // Rutas only at zoom ≥ 13 — lower zooms return too many ways and collapse the renderer
-      if (zoom >= 13) loadLayer("rutas", (force) => fetchRutas(bbox, force));
-    }, 600);
-  }, [loadLayer]);
+  // Load all functional layers on mount
+  useEffect(() => {
+    for (const id of FUNCTIONAL_LAYER_IDS) {
+      loadLayer(id, (force) => fetchLayer(id, force));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  // Refresh one layer (or all) with the current bbox
+  // Refresh one layer (or all)
   const handleRefresh = useCallback((id?: LayerId) => {
-    const bbox = currentBboxRef.current;
-    if (!bbox) return;
     if (id) {
-      const fetchers: Partial<Record<LayerId, (bbox: string, force: boolean) => Promise<{ data: GeoJSON.FeatureCollection; info: CacheInfo }>>> = {
-        camping:    fetchCamping,
-        agua:       fetchAgua,
-        rutas:      fetchRutas,
-        wc:         fetchWC,
-        biblioteca: fetchBiblioteca,
-      };
-      const fetcher = fetchers[id];
-      if (fetcher) loadLayer(id, (force) => fetcher(bbox, force), true);
+      loadLayer(id, (force) => fetchLayer(id, force), true);
     } else {
-      loadLayer("camping",    (force) => fetchCamping(bbox, force), true);
-      loadLayer("agua",       (force) => fetchAgua(bbox, force), true);
-      loadLayer("rutas",      (force) => fetchRutas(bbox, force), true);
-      loadLayer("wc",         (force) => fetchWC(bbox, force), true);
-      loadLayer("biblioteca", (force) => fetchBiblioteca(bbox, force), true);
+      for (const lid of FUNCTIONAL_LAYER_IDS) {
+        loadLayer(lid, (force) => fetchLayer(lid, force), true);
+      }
     }
   }, [loadLayer]);
 
@@ -124,7 +103,6 @@ export default function HomePage() {
           data={data}
           selectedFeature={selectedFeature}
           onFeatureClick={handleFeatureClick}
-          onBoundsChange={handleBoundsChange}
         />
       </div>
 
