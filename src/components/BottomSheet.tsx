@@ -240,6 +240,35 @@ function IvanDetail({ props }: { props: Props }) {
   );
 }
 
+function RepoDetail({ props }: { props: Props }) {
+  return (
+    <div className="space-y-3">
+      {!!props.type && <Tag color="blue">{String(props.type)}</Tag>}
+      {!!props.image && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={String(props.image)}
+          alt={String(props.name ?? "")}
+          className="w-full h-44 object-cover rounded-xl"
+          onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+        />
+      )}
+      {!!props.description && (
+        <p className="text-sm text-gray-600 leading-relaxed">{String(props.description)}</p>
+      )}
+      {!!props.notes && (
+        <p className="text-sm text-gray-500 italic">{String(props.notes)}</p>
+      )}
+      {!!props.url && (
+        <a href={String(props.url)} target="_blank" rel="noopener noreferrer"
+          className="text-sm text-indigo-600 font-medium">
+          🌐 Ver más →
+        </a>
+      )}
+    </div>
+  );
+}
+
 function EventoDetail({ props }: { props: Props }) {
   const catLabel: Record<string, string> = {
     fiesta: "🎊 Fiesta local",
@@ -290,8 +319,9 @@ export default function BottomSheet({ feature, onClose }: BottomSheetProps) {
   if (!feature) return null;
 
   const props = (feature.properties ?? {}) as Props;
+  const isRepo = !!props._repoId;
   const layerId = String(props._layerId ?? "") as LayerId;
-  const icon = LAYER_ICON[layerId] ?? "📍";
+  const icon = isRepo ? "📌" : (LAYER_ICON[layerId] ?? "📍");
 
   return (
     <>
@@ -321,13 +351,14 @@ export default function BottomSheet({ feature, onClose }: BottomSheetProps) {
 
         {/* Content */}
         <div ref={sheetRef} className="overflow-y-auto px-4 py-4 flex-1">
-          {layerId === "camping" && <CampingDetail props={props} />}
-          {layerId === "agua" && <AguaDetail props={props} />}
-          {layerId === "rutas" && <RutaDetail props={props} />}
-          {layerId === "wikipedia" && <WikipediaDetail props={props} />}
-          {layerId === "wikidata" && <WikidataDetail props={props} />}
-          {layerId === "ivan" && <IvanDetail props={props} />}
-          {layerId === "eventos" && <EventoDetail props={props} />}
+          {isRepo                    && <RepoDetail props={props} />}
+          {!isRepo && layerId === "camping"   && <CampingDetail props={props} />}
+          {!isRepo && layerId === "agua"      && <AguaDetail props={props} />}
+          {!isRepo && layerId === "rutas"     && <RutaDetail props={props} />}
+          {!isRepo && layerId === "wikipedia" && <WikipediaDetail props={props} />}
+          {!isRepo && layerId === "wikidata"  && <WikidataDetail props={props} />}
+          {!isRepo && layerId === "ivan"      && <IvanDetail props={props} />}
+          {!isRepo && layerId === "eventos"   && <EventoDetail props={props} />}
         </div>
       </div>
     </>

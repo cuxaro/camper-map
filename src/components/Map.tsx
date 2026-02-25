@@ -93,17 +93,29 @@ function LocateButton() {
 
 const EMPTY_FC: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
 const POINT_LAYERS: LayerId[] = ["camping", "agua", "eventos", "wikipedia", "wikidata", "wc", "ivan"];
+const REPO_COLOR = "#6366f1";
 
 export type MapData = Partial<Record<LayerId, GeoJSON.FeatureCollection>>;
 
 interface MapProps {
   enabledLayers: Set<LayerId>;
   data: MapData;
+  repoDatas?: Record<string, GeoJSON.FeatureCollection>;
   selectedFeature: GeoJSON.Feature | null;
   onFeatureClick: (feature: GeoJSON.Feature) => void;
 }
 
-export default function Map({ enabledLayers, data, selectedFeature, onFeatureClick }: MapProps) {
+function makeRepoIcon(props: Record<string, unknown>): L.DivIcon {
+  const emoji = props.type ? "📌" : "📍";
+  return L.divIcon({
+    html: `<div style="background:${REPO_COLOR};border:2px solid #fff;border-radius:50%;width:30px;height:30px;display:flex;align-items:center;justify-content:center;font-size:15px;box-shadow:0 2px 6px rgba(0,0,0,.3)">${emoji}</div>`,
+    iconSize: [30, 30],
+    iconAnchor: [15, 15],
+    className: "",
+  });
+}
+
+export default function Map({ enabledLayers, data, repoDatas = {}, selectedFeature, onFeatureClick }: MapProps) {
   return (
     <MapContainer
       center={CASTELLON_CENTER}
@@ -159,6 +171,25 @@ export default function Map({ enabledLayers, data, selectedFeature, onFeatureCli
           })}
         </MarkerClusterGroup>
       )}
+
+      {/* Repo layers */}
+      {Object.entries(repoDatas).map(([repoId, fc]) => (
+        <MarkerClusterGroup key={`repo-${repoId}`} chunkedLoading maxClusterRadius={50} disableClusteringAtZoom={13}>
+          {fc.features.map((feature, i) => {
+            if (feature.geometry.type !== "Point") return null;
+            const [lon, lat] = feature.geometry.coordinates;
+            const props = (feature.properties ?? {}) as Record<string, unknown>;
+            return (
+              <Marker
+                key={`${repoId}-${i}`}
+                position={[lat, lon]}
+                icon={makeRepoIcon(props)}
+                eventHandlers={{ click: () => onFeatureClick(feature) }}
+              />
+            );
+          })}
+        </MarkerClusterGroup>
+      ))}
 
       {/* Active route line — only shown when a ruta is selected */}
       {selectedFeature?.properties?._layerId === "rutas" &&

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { LAYERS, LAYER_GROUPS } from "@/types/layers";
 import type { LayerId } from "@/types/layers";
 import type { CacheInfo } from "@/lib/overpass";
@@ -163,6 +164,25 @@ export default function LayerPanel({
               </div>
             );
           })}
+
+          {/* ── Mis capas (CSV) ─────────────────────────────────────────── */}
+          <div className="border-t border-gray-100 py-1">
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide px-4 pt-3 pb-1">
+              Mis capas
+            </p>
+            <Link
+              href="/repositorio"
+              onClick={onClose}
+              className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors"
+            >
+              <span className="text-xl">📁</span>
+              <div className="flex-1 min-w-0">
+                <span className="font-medium text-sm text-gray-700">Repositorio de capas</span>
+                <p className="text-xs text-gray-400 mt-0.5 leading-tight">Sube y gestiona tus CSV personalizados</p>
+              </div>
+              <span className="text-gray-400 text-sm">→</span>
+            </Link>
+          </div>
 
           {/* ── Coming soon ─────────────────────────────────────────────── */}
           {comingSoonLayers.length > 0 && (

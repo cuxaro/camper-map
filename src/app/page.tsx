@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import LayerPanel from "@/components/LayerPanel";
 import BottomSheet from "@/components/BottomSheet";
 import { usePersistedLayers } from "@/hooks/usePersistedLayers";
+import { useActiveRepos } from "@/hooks/useActiveRepos";
 import { fetchLayer, type CacheInfo } from "@/lib/overpass";
 import { eventosData } from "@/data/mock";
 import type { LayerId } from "@/types/layers";
@@ -18,11 +19,13 @@ export type LayerCacheInfo = Partial<Record<LayerId, CacheInfo>>;
 
 export default function HomePage() {
   const { enabledLayers, toggleLayer } = usePersistedLayers();
+  const { activeRepos } = useActiveRepos();
   const [layerPanelOpen, setLayerPanelOpen] = useState(false);
   const [selectedFeature, setSelectedFeature] = useState<GeoJSON.Feature | null>(null);
   const [data, setData] = useState<MapData>({
     eventos: eventosData,
   });
+  const [repoDatas, setRepoDatas] = useState<Record<string, GeoJSON.FeatureCollection>>({});
   const [loadingLayers, setLoadingLayers] = useState<Set<LayerId>>(new Set());
   const [errorLayers, setErrorLayers] = useState<Set<LayerId>>(new Set());
   const [cacheInfo, setCacheInfo] = useState<LayerCacheInfo>({});
@@ -54,6 +57,25 @@ export default function HomePage() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Load active repos data whenever the list changes
+  useEffect(() => {
+    if (activeRepos.length === 0) { setRepoDatas({}); return; }
+    void Promise.all(
+      activeRepos.map(async (id) => {
+        try {
+          const res = await fetch(`/api/repos/${id}`);
+          if (!res.ok) return null;
+          const fc = await res.json() as GeoJSON.FeatureCollection;
+          return { id, fc };
+        } catch { return null; }
+      })
+    ).then((results) => {
+      const next: Record<string, GeoJSON.FeatureCollection> = {};
+      for (const r of results) { if (r) next[r.id] = r.fc; }
+      setRepoDatas(next);
+    });
+  }, [activeRepos]);
 
   // Refresh one layer (or all)
   const handleRefresh = useCallback((id?: LayerId) => {
@@ -100,6 +122,7 @@ export default function HomePage() {
         <Map
           enabledLayers={enabledLayers}
           data={data}
+          repoDatas={repoDatas}
           selectedFeature={selectedFeature}
           onFeatureClick={handleFeatureClick}
         />
