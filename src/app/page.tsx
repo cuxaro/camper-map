@@ -6,7 +6,7 @@ import LayerPanel from "@/components/LayerPanel";
 import BottomSheet from "@/components/BottomSheet";
 import { usePersistedLayers } from "@/hooks/usePersistedLayers";
 import { fetchLayer, type CacheInfo } from "@/lib/overpass";
-import { eventosData, wikipediaData } from "@/data/mock";
+import { eventosData } from "@/data/mock";
 import type { LayerId } from "@/types/layers";
 import { LAYERS } from "@/types/layers";
 import { FUNCTIONAL_LAYER_IDS } from "@/lib/overpass-server";
@@ -22,7 +22,6 @@ export default function HomePage() {
   const [selectedFeature, setSelectedFeature] = useState<GeoJSON.Feature | null>(null);
   const [data, setData] = useState<MapData>({
     eventos: eventosData,
-    wikipedia: wikipediaData,
   });
   const [loadingLayers, setLoadingLayers] = useState<Set<LayerId>>(new Set());
   const [errorLayers, setErrorLayers] = useState<Set<LayerId>>(new Set());

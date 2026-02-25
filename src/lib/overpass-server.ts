@@ -212,9 +212,87 @@ async function fetchBiblioteca(): Promise<GeoJSON.FeatureCollection> {
   }));
 }
 
+// ─── Wikipedia fetch ──────────────────────────────────────────────────────────
+
+const WIKI_BASE = "https://es.wikipedia.org/w/api.php";
+
+interface WikiGeoItem {
+  pageid: number;
+  title: string;
+  lat: number;
+  lon: number;
+}
+
+interface WikiPage {
+  pageid: number;
+  title: string;
+  extract?: string;
+}
+
+async function fetchWikipedia(): Promise<GeoJSON.FeatureCollection> {
+  // Step 1: geosearch for all geolocated articles in Castellón bbox
+  // gsbbox format: maxlat|minlon|minlat|maxlon
+  const geoUrl = new URL(WIKI_BASE);
+  geoUrl.searchParams.set("action", "query");
+  geoUrl.searchParams.set("list", "geosearch");
+  geoUrl.searchParams.set("gsbbox", "40.9|-0.7|39.7|0.6");
+  geoUrl.searchParams.set("gslimit", "500");
+  geoUrl.searchParams.set("gsnamespace", "0");
+  geoUrl.searchParams.set("format", "json");
+
+  const geoRes = await fetch(geoUrl.toString());
+  if (!geoRes.ok) throw new Error(`Wikipedia geosearch HTTP ${geoRes.status}`);
+  const geoData = await geoRes.json() as { query?: { geosearch?: WikiGeoItem[] } };
+  const items: WikiGeoItem[] = geoData.query?.geosearch ?? [];
+
+  if (items.length === 0) return EMPTY;
+
+  // Step 2: batch-fetch plain-text intro extracts (100 per call)
+  const summaries = new Map<number, string>();
+  for (let i = 0; i < items.length; i += 100) {
+    const ids = items.slice(i, i + 100).map((p) => p.pageid).join("|");
+    const sumUrl = new URL(WIKI_BASE);
+    sumUrl.searchParams.set("action", "query");
+    sumUrl.searchParams.set("pageids", ids);
+    sumUrl.searchParams.set("prop", "extracts");
+    sumUrl.searchParams.set("exintro", "1");
+    sumUrl.searchParams.set("explaintext", "1");
+    sumUrl.searchParams.set("exsentences", "3");
+    sumUrl.searchParams.set("format", "json");
+
+    try {
+      const sumRes = await fetch(sumUrl.toString());
+      if (sumRes.ok) {
+        const sumData = await sumRes.json() as { query?: { pages?: Record<string, WikiPage> } };
+        for (const page of Object.values(sumData.query?.pages ?? {})) {
+          summaries.set(page.pageid, page.extract ?? "");
+        }
+      }
+    } catch {
+      // partial failure — continue with empty summaries for this batch
+    }
+  }
+
+  // Step 3: build GeoJSON
+  const features: GeoJSON.Feature[] = items.map((item) => ({
+    type: "Feature",
+    id: item.pageid,
+    geometry: { type: "Point", coordinates: [item.lon, item.lat] },
+    properties: {
+      _layerId: "wikipedia" as LayerId,
+      _osmId: `wikipedia/${item.pageid}`,
+      name: item.title,
+      summary: summaries.get(item.pageid) ?? "",
+      url: `https://es.wikipedia.org/wiki/${encodeURIComponent(item.title.replace(/ /g, "_"))}`,
+    },
+  }));
+
+  return { type: "FeatureCollection", features };
+}
+
 // ─── Public API ───────────────────────────────────────────────────────────────
 
-export const FUNCTIONAL_LAYER_IDS: LayerId[] = ["camping", "agua", "rutas", "wc", "biblioteca"];
+export const FUNCTIONAL_LAYER_IDS: LayerId[] = ["camping", "agua", "rutas", "wc", "biblioteca", "wikipedia"];
 
 export async function fetchLayerFromOverpass(layerId: LayerId): Promise<LayerResponse> {
   let data: GeoJSON.FeatureCollection;
@@ -225,6 +303,7 @@ export async function fetchLayerFromOverpass(layerId: LayerId): Promise<LayerRes
     case "rutas":      data = await fetchRutas(); break;
     case "wc":         data = await fetchWC(); break;
     case "biblioteca": data = await fetchBiblioteca(); break;
+    case "wikipedia":  data = await fetchWikipedia(); break;
     default:
       data = EMPTY;
   }

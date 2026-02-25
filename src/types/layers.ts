@@ -58,9 +58,8 @@ export const LAYERS: Layer[] = [
     icon: "📖",
     color: "#a855f7",
     enabled: false,
-    implemented: false,
-    source: "Wikipedia API",
-    comingSoon: "Sprint 3",
+    implemented: true,
+    source: "Wikipedia (es)",
   },
   {
     id: "clima",
