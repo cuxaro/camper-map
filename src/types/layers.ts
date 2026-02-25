@@ -12,8 +12,10 @@ export interface Layer {
   description: string;
   icon: string;
   color: string;
-  enabled: boolean;
+  enabled: boolean;   // default on/off
+  implemented: boolean; // false = coming soon, not interactive
   source: string;
+  comingSoon?: string; // short description of what's planned
 }
 
 export const LAYERS: Layer[] = [
@@ -24,24 +26,27 @@ export const LAYERS: Layer[] = [
     icon: "⛺",
     color: "#22c55e",
     enabled: true,
+    implemented: true,
     source: "OpenStreetMap",
   },
   {
     id: "rutas",
     label: "Rutas & Senderos",
-    description: "Rutas de senderismo, ciclismo y moto",
+    description: "Rutas de senderismo y caminos marcados",
     icon: "🥾",
     color: "#f97316",
     enabled: true,
+    implemented: true,
     source: "OpenStreetMap",
   },
   {
     id: "agua",
     label: "Fuentes de agua",
-    description: "Fuentes, ríos y puntos de agua potable",
+    description: "Fuentes, manantiales y agua potable",
     icon: "💧",
     color: "#38bdf8",
     enabled: false,
+    implemented: true,
     source: "OpenStreetMap",
   },
   {
@@ -51,7 +56,9 @@ export const LAYERS: Layer[] = [
     icon: "📖",
     color: "#a855f7",
     enabled: false,
-    source: "Wikipedia",
+    implemented: false,
+    source: "Wikipedia API",
+    comingSoon: "Sprint 3",
   },
   {
     id: "clima",
@@ -60,7 +67,9 @@ export const LAYERS: Layer[] = [
     icon: "🌤",
     color: "#facc15",
     enabled: false,
+    implemented: false,
     source: "OpenWeatherMap",
+    comingSoon: "Sprint 3",
   },
   {
     id: "eventos",
@@ -69,6 +78,8 @@ export const LAYERS: Layer[] = [
     icon: "🎉",
     color: "#f43f5e",
     enabled: false,
+    implemented: false,
     source: "Mock data",
+    comingSoon: "Sprint 4",
   },
 ];
