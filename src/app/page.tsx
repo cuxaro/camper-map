@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useRef } from "react";
 import dynamic from "next/dynamic";
 import LayerPanel from "@/components/LayerPanel";
 import BottomSheet from "@/components/BottomSheet";
@@ -27,6 +27,9 @@ export default function HomePage() {
   const [errorLayers, setErrorLayers] = useState<Set<LayerId>>(new Set());
   const [cacheInfo, setCacheInfo] = useState<LayerCacheInfo>({});
 
+  const currentBboxRef = useRef<string>("");
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Generic loader — force=true bypasses cache
   const loadLayer = useCallback(async (
     id: LayerId,
@@ -38,7 +41,6 @@ export default function HomePage() {
 
     const { data: fc, info } = await fetcher(force);
 
-    // If fetch returned 0 features and it was a fresh fetch, mark as error
     if (info.fresh && fc.features.length === 0) {
       setErrorLayers((prev) => new Set([...prev, id]));
     }
@@ -48,27 +50,33 @@ export default function HomePage() {
     setLoadingLayers((prev) => { const n = new Set(prev); n.delete(id); return n; });
   }, []);
 
-  // Initial load
-  useEffect(() => {
-    loadLayer("camping", fetchCamping);
-    loadLayer("agua", fetchAgua);
-    loadLayer("rutas", fetchRutas);
+  // Fired by MapBoundsTracker when the map stops moving
+  const handleBoundsChange = useCallback((bbox: string) => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      currentBboxRef.current = bbox;
+      loadLayer("camping", (force) => fetchCamping(bbox, force));
+      loadLayer("agua",    (force) => fetchAgua(bbox, force));
+      loadLayer("rutas",   (force) => fetchRutas(bbox, force));
+    }, 600);
   }, [loadLayer]);
 
-  // Refresh one layer (or all if no id given)
+  // Refresh one layer (or all) with the current bbox
   const handleRefresh = useCallback((id?: LayerId) => {
+    const bbox = currentBboxRef.current;
+    if (!bbox) return;
     if (id) {
-      const fetchers: Partial<Record<LayerId, (f: boolean) => Promise<{ data: GeoJSON.FeatureCollection; info: CacheInfo }>>> = {
+      const fetchers: Partial<Record<LayerId, (bbox: string, force: boolean) => Promise<{ data: GeoJSON.FeatureCollection; info: CacheInfo }>>> = {
         camping: fetchCamping,
         agua: fetchAgua,
         rutas: fetchRutas,
       };
       const fetcher = fetchers[id];
-      if (fetcher) loadLayer(id, fetcher, true);
+      if (fetcher) loadLayer(id, (force) => fetcher(bbox, force), true);
     } else {
-      loadLayer("camping", fetchCamping, true);
-      loadLayer("agua", fetchAgua, true);
-      loadLayer("rutas", fetchRutas, true);
+      loadLayer("camping", (force) => fetchCamping(bbox, force), true);
+      loadLayer("agua",    (force) => fetchAgua(bbox, force), true);
+      loadLayer("rutas",   (force) => fetchRutas(bbox, force), true);
     }
   }, [loadLayer]);
 
@@ -87,7 +95,6 @@ export default function HomePage() {
         <div className="pointer-events-auto bg-white/95 backdrop-blur rounded-xl px-3 py-2 shadow-lg flex items-center gap-2">
           <span className="text-lg">🏕</span>
           <span className="font-bold text-gray-900 text-sm tracking-tight">CamperMap</span>
-          <span className="text-xs text-gray-400 font-normal">Castellón</span>
         </div>
 
         <button
@@ -104,7 +111,12 @@ export default function HomePage() {
 
       {/* Map */}
       <div className="flex-1">
-        <Map enabledLayers={enabledLayers} data={data} onFeatureClick={handleFeatureClick} />
+        <Map
+          enabledLayers={enabledLayers}
+          data={data}
+          onFeatureClick={handleFeatureClick}
+          onBoundsChange={handleBoundsChange}
+        />
       </div>
 
       {/* Global loading indicator */}

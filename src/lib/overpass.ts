@@ -1,6 +1,5 @@
 import type { LayerId } from "@/types/layers";
 
-const BBOX = "39.7,-0.7,40.9,0.6"; // Castellón province: south,west,north,east
 const OVERPASS_URL = "https://overpass-api.de/api/interpreter";
 const CACHE_TTL_MS = 1000 * 60 * 60 * 24; // 24 hours
 const CACHE_PREFIX = "campermap_osm_";
@@ -31,6 +30,7 @@ interface StoredEntry {
   data: GeoJSON.FeatureCollection;
   cachedAt: number;
   count: number;
+  bbox?: string;      // undefined = old format → always invalidate
 }
 
 // ─── Cache helpers ────────────────────────────────────────────────────────────
@@ -39,7 +39,7 @@ function cacheKey(id: string) {
   return `${CACHE_PREFIX}${id}`;
 }
 
-function readCache(id: string): StoredEntry | null {
+function readCache(id: string, bbox: string): StoredEntry | null {
   try {
     const raw = localStorage.getItem(cacheKey(id));
     if (!raw) return null;
@@ -48,21 +48,21 @@ function readCache(id: string): StoredEntry | null {
       localStorage.removeItem(cacheKey(id));
       return null;
     }
+    if (entry.bbox !== bbox) return null; // different area → fetch fresh
     return entry;
   } catch {
     return null;
   }
 }
 
-function writeCache(id: string, data: GeoJSON.FeatureCollection) {
+function writeCache(id: string, data: GeoJSON.FeatureCollection, bbox: string) {
   try {
-    const entry: StoredEntry = { data, cachedAt: Date.now(), count: data.features.length };
+    const entry: StoredEntry = { data, cachedAt: Date.now(), count: data.features.length, bbox };
     localStorage.setItem(cacheKey(id), JSON.stringify(entry));
   } catch (e) {
-    // localStorage full — try clearing old entries
     try {
       clearOldEntries();
-      const entry: StoredEntry = { data, cachedAt: Date.now(), count: data.features.length };
+      const entry: StoredEntry = { data, cachedAt: Date.now(), count: data.features.length, bbox };
       localStorage.setItem(cacheKey(id), JSON.stringify(entry));
     } catch {
       console.warn("localStorage quota exceeded, cache skipped:", e);
@@ -77,7 +77,6 @@ function clearOldEntries() {
 
 // ─── Public cache API ─────────────────────────────────────────────────────────
 
-/** Returns cache metadata for a layer without loading data. Null if not cached. */
 export function getCacheInfo(id: string): Omit<CacheInfo, "fresh"> | null {
   try {
     const raw = localStorage.getItem(cacheKey(id));
@@ -90,7 +89,6 @@ export function getCacheInfo(id: string): Omit<CacheInfo, "fresh"> | null {
   }
 }
 
-/** Clears cache for one layer, or all layers if no id given. */
 export function clearLayerCache(id?: string) {
   if (id) {
     localStorage.removeItem(cacheKey(id));
@@ -185,9 +183,9 @@ function elementsToLines(
 
 // ─── Fetch functions ──────────────────────────────────────────────────────────
 
-export async function fetchCamping(force = false): Promise<{ data: GeoJSON.FeatureCollection; info: CacheInfo }> {
+export async function fetchCamping(bbox: string, force = false): Promise<{ data: GeoJSON.FeatureCollection; info: CacheInfo }> {
   if (!force) {
-    const cached = readCache("camping");
+    const cached = readCache("camping", bbox);
     if (cached) return { data: cached.data, info: { ...cached, fresh: false } };
   }
 
@@ -195,12 +193,12 @@ export async function fetchCamping(force = false): Promise<{ data: GeoJSON.Featu
     const ql = `
       [out:json][timeout:25];
       (
-        node["tourism"="camp_site"](${BBOX});
-        node["tourism"="caravan_site"](${BBOX});
-        node["tourism"="picnic_site"](${BBOX});
-        node["amenity"="shelter"](${BBOX});
-        way["tourism"="camp_site"](${BBOX});
-        way["tourism"="caravan_site"](${BBOX});
+        node["tourism"="camp_site"](${bbox});
+        node["tourism"="caravan_site"](${bbox});
+        node["tourism"="picnic_site"](${bbox});
+        node["amenity"="shelter"](${bbox});
+        way["tourism"="camp_site"](${bbox});
+        way["tourism"="caravan_site"](${bbox});
       );
       out body center;
     `;
@@ -222,7 +220,7 @@ export async function fetchCamping(force = false): Promise<{ data: GeoJSON.Featu
       website: el.tags?.website ?? el.tags?.url ?? "",
     }));
 
-    writeCache("camping", data);
+    if (data.features.length > 0) writeCache("camping", data, bbox);
     return { data, info: { cachedAt: Date.now(), count: data.features.length, fresh: true } };
   } catch (err) {
     console.error("Overpass camping:", err);
@@ -230,9 +228,9 @@ export async function fetchCamping(force = false): Promise<{ data: GeoJSON.Featu
   }
 }
 
-export async function fetchAgua(force = false): Promise<{ data: GeoJSON.FeatureCollection; info: CacheInfo }> {
+export async function fetchAgua(bbox: string, force = false): Promise<{ data: GeoJSON.FeatureCollection; info: CacheInfo }> {
   if (!force) {
-    const cached = readCache("agua");
+    const cached = readCache("agua", bbox);
     if (cached) return { data: cached.data, info: { ...cached, fresh: false } };
   }
 
@@ -240,9 +238,9 @@ export async function fetchAgua(force = false): Promise<{ data: GeoJSON.FeatureC
     const ql = `
       [out:json][timeout:25];
       (
-        node["amenity"="drinking_water"](${BBOX});
-        node["natural"="spring"](${BBOX});
-        node["amenity"="water_point"](${BBOX});
+        node["amenity"="drinking_water"](${bbox});
+        node["natural"="spring"](${bbox});
+        node["amenity"="water_point"](${bbox});
       );
       out body;
     `;
@@ -254,7 +252,7 @@ export async function fetchAgua(force = false): Promise<{ data: GeoJSON.FeatureC
       flow: el.tags?.flow_rate ?? "",
     }));
 
-    writeCache("agua", data);
+    if (data.features.length > 0) writeCache("agua", data, bbox);
     return { data, info: { cachedAt: Date.now(), count: data.features.length, fresh: true } };
   } catch (err) {
     console.error("Overpass agua:", err);
@@ -262,9 +260,9 @@ export async function fetchAgua(force = false): Promise<{ data: GeoJSON.FeatureC
   }
 }
 
-export async function fetchRutas(force = false): Promise<{ data: GeoJSON.FeatureCollection; info: CacheInfo }> {
+export async function fetchRutas(bbox: string, force = false): Promise<{ data: GeoJSON.FeatureCollection; info: CacheInfo }> {
   if (!force) {
-    const cached = readCache("rutas");
+    const cached = readCache("rutas", bbox);
     if (cached) return { data: cached.data, info: { ...cached, fresh: false } };
   }
 
@@ -272,10 +270,10 @@ export async function fetchRutas(force = false): Promise<{ data: GeoJSON.Feature
     const ql = `
       [out:json][timeout:30];
       (
-        way["highway"="path"](${BBOX});
-        way["highway"="footway"]["area"!="yes"](${BBOX});
-        way["highway"="track"](${BBOX});
-        way["highway"="bridleway"](${BBOX});
+        way["highway"="path"](${bbox});
+        way["highway"="footway"]["area"!="yes"](${bbox});
+        way["highway"="track"](${bbox});
+        way["highway"="bridleway"](${bbox});
       );
       out body geom;
     `;
@@ -283,7 +281,7 @@ export async function fetchRutas(force = false): Promise<{ data: GeoJSON.Feature
     const raw = await runQuery(ql);
     const data = elementsToLines(raw.elements, "rutas");
 
-    if (data.features.length > 0) writeCache("rutas", data);
+    if (data.features.length > 0) writeCache("rutas", data, bbox);
     return { data, info: { cachedAt: Date.now(), count: data.features.length, fresh: true } };
   } catch (err) {
     console.error("Overpass rutas:", err);

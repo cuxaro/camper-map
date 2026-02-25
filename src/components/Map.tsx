@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { MapContainer, TileLayer, Marker, Polyline, ZoomControl, useMap, useMapEvents } from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-cluster";
 import L from "leaflet";
@@ -45,6 +45,31 @@ function makeIcon(layerId: LayerId, props: Record<string, unknown>): L.DivIcon {
   });
 }
 
+const MIN_ZOOM = 9;
+
+function MapBoundsTracker({ onBoundsChange }: { onBoundsChange: (bbox: string) => void }) {
+  const map = useMap();
+  const cbRef = useRef(onBoundsChange);
+  cbRef.current = onBoundsChange;
+
+  const fire = useCallback(() => {
+    if (map.getZoom() < MIN_ZOOM) return;
+    const b = map.getBounds();
+    const bbox = [
+      b.getSouth().toFixed(2),
+      b.getWest().toFixed(2),
+      b.getNorth().toFixed(2),
+      b.getEast().toFixed(2),
+    ].join(",");
+    cbRef.current(bbox);
+  }, [map]);
+
+  useEffect(() => { fire(); }, [fire]);
+  useMapEvents({ moveend: fire, zoomend: fire });
+
+  return null;
+}
+
 function LocateButton() {
   const map = useMap();
   const [locating, setLocating] = useState(false);
@@ -84,9 +109,10 @@ interface MapProps {
   enabledLayers: Set<LayerId>;
   data: MapData;
   onFeatureClick: (feature: GeoJSON.Feature) => void;
+  onBoundsChange: (bbox: string) => void;
 }
 
-export default function Map({ enabledLayers, data, onFeatureClick }: MapProps) {
+export default function Map({ enabledLayers, data, onFeatureClick, onBoundsChange }: MapProps) {
   return (
     <MapContainer
       center={CASTELLON_CENTER}
@@ -100,13 +126,14 @@ export default function Map({ enabledLayers, data, onFeatureClick }: MapProps) {
       />
       <ZoomControl position="bottomright" />
       <LocateButton />
+      <MapBoundsTracker onBoundsChange={onBoundsChange} />
 
       {/* Point layers with clustering */}
       {POINT_LAYERS.map((id) => {
         if (!enabledLayers.has(id)) return null;
         const features = (data[id] ?? EMPTY_FC).features;
         return (
-          <MarkerClusterGroup key={id} chunkedLoading>
+          <MarkerClusterGroup key={id} chunkedLoading maxClusterRadius={50} disableClusteringAtZoom={13}>
             {features.map((feature) => {
               if (feature.geometry.type !== "Point") return null;
               const [lon, lat] = feature.geometry.coordinates;
