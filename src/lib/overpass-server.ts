@@ -223,37 +223,48 @@ async function fetchIvan(): Promise<GeoJSON.FeatureCollection> {
   });
 }
 
-// ─── Wikipedia fetch ──────────────────────────────────────────────────────────
+// ─── Wikipedia fetch (es + ca) ────────────────────────────────────────────────
 
-const WIKI_BASE = "https://es.wikipedia.org/w/api.php";
 // The Wikipedia geosearch API rejects bounding boxes larger than ~0.2°x0.2°.
 // We tile the full Castellón bbox into 0.18° cells and query all tiles in parallel.
+// Both es.wikipedia.org and ca.wikipedia.org (Catalan/Valencian) are queried;
+// ca articles within 200m of an es article are considered duplicates and dropped.
 const WIKI_TILE_DEG = 0.18;
 const CASTELLON_MIN_LAT = 39.7;
 const CASTELLON_MAX_LAT = 40.9;
 const CASTELLON_MIN_LON = -0.7;
 const CASTELLON_MAX_LON = 0.6;
+const WIKI_PROX_DEG = 0.002; // ~200m — dedup threshold between wikis
+
+type WikiLang = "es" | "ca";
 
 interface WikiGeoItem {
   pageid: number;
   title: string;
   lat: number;
   lon: number;
+  lang: WikiLang;
 }
 
 interface WikiPage {
   pageid: number;
   title: string;
   extract?: string;
+  thumbnail?: { source: string };
+}
+
+interface WikiSummary {
+  extract: string;
+  image: string;
 }
 
 async function fetchWikipediaTile(
-  minLat: number, minLon: number, maxLat: number, maxLon: number
+  minLat: number, minLon: number, maxLat: number, maxLon: number,
+  lang: WikiLang
 ): Promise<WikiGeoItem[]> {
-  const url = new URL(WIKI_BASE);
+  const url = new URL(`https://${lang}.wikipedia.org/w/api.php`);
   url.searchParams.set("action", "query");
   url.searchParams.set("list", "geosearch");
-  // gsbbox: maxlat|minlon|minlat|maxlon
   url.searchParams.set("gsbbox", `${maxLat}|${minLon}|${minLat}|${maxLon}`);
   url.searchParams.set("gslimit", "500");
   url.searchParams.set("gsnamespace", "0");
@@ -262,85 +273,217 @@ async function fetchWikipediaTile(
   try {
     const res = await fetch(url.toString());
     if (!res.ok) return [];
-    const data = await res.json() as { query?: { geosearch?: WikiGeoItem[] } };
-    return data.query?.geosearch ?? [];
+    const data = await res.json() as { query?: { geosearch?: Omit<WikiGeoItem, "lang">[] } };
+    return (data.query?.geosearch ?? []).map((item) => ({ ...item, lang }));
   } catch {
     return [];
   }
 }
 
 async function fetchWikipedia(): Promise<GeoJSON.FeatureCollection> {
-  // Step 1: generate tile grid and fetch all tiles in parallel
+  // Step 1: fetch all tiles for es and ca simultaneously
   const tilePromises: Promise<WikiGeoItem[]>[] = [];
-  for (let lat = CASTELLON_MIN_LAT; lat < CASTELLON_MAX_LAT; lat += WIKI_TILE_DEG) {
-    for (let lon = CASTELLON_MIN_LON; lon < CASTELLON_MAX_LON; lon += WIKI_TILE_DEG) {
-      const maxLat = Math.min(lat + WIKI_TILE_DEG, CASTELLON_MAX_LAT);
-      const maxLon = Math.min(lon + WIKI_TILE_DEG, CASTELLON_MAX_LON);
-      tilePromises.push(fetchWikipediaTile(lat, lon, maxLat, maxLon));
+  for (const lang of ["es", "ca"] as WikiLang[]) {
+    for (let lat = CASTELLON_MIN_LAT; lat < CASTELLON_MAX_LAT; lat += WIKI_TILE_DEG) {
+      for (let lon = CASTELLON_MIN_LON; lon < CASTELLON_MAX_LON; lon += WIKI_TILE_DEG) {
+        const maxLat = Math.min(lat + WIKI_TILE_DEG, CASTELLON_MAX_LAT);
+        const maxLon = Math.min(lon + WIKI_TILE_DEG, CASTELLON_MAX_LON);
+        tilePromises.push(fetchWikipediaTile(lat, lon, maxLat, maxLon, lang));
+      }
     }
   }
   const tileResults = await Promise.all(tilePromises);
 
-  // Step 2: flatten and deduplicate by pageId
-  const seen = new Set<number>();
-  const items: WikiGeoItem[] = [];
+  // Step 2: dedup within each lang, then drop ca items within 200m of any es item
+  const seenEs = new Set<number>();
+  const seenCa = new Set<number>();
+  const esItems: WikiGeoItem[] = [];
+  const caItems: WikiGeoItem[] = [];
+
   for (const tile of tileResults) {
     for (const item of tile) {
-      if (!seen.has(item.pageid)) {
-        seen.add(item.pageid);
-        items.push(item);
+      if (item.lang === "es" && !seenEs.has(item.pageid)) {
+        seenEs.add(item.pageid);
+        esItems.push(item);
+      } else if (item.lang === "ca" && !seenCa.has(item.pageid)) {
+        seenCa.add(item.pageid);
+        caItems.push(item);
       }
     }
+  }
+
+  const items: WikiGeoItem[] = [...esItems];
+  for (const ca of caItems) {
+    const isDuplicate = esItems.some(
+      (es) => Math.abs(es.lat - ca.lat) < WIKI_PROX_DEG && Math.abs(es.lon - ca.lon) < WIKI_PROX_DEG
+    );
+    if (!isDuplicate) items.push(ca);
   }
 
   if (items.length === 0) return EMPTY;
 
-  // Step 3: batch-fetch plain-text intro extracts (100 per call)
-  const summaries = new Map<number, string>();
-  for (let i = 0; i < items.length; i += 100) {
-    const ids = items.slice(i, i + 100).map((p) => p.pageid).join("|");
-    const sumUrl = new URL(WIKI_BASE);
-    sumUrl.searchParams.set("action", "query");
-    sumUrl.searchParams.set("pageids", ids);
-    sumUrl.searchParams.set("prop", "extracts");
-    sumUrl.searchParams.set("exintro", "1");
-    sumUrl.searchParams.set("explaintext", "1");
-    sumUrl.searchParams.set("exsentences", "3");
-    sumUrl.searchParams.set("format", "json");
+  // Step 3: batch-fetch extracts + thumbnail images per lang (100 per call)
+  const summaries = new Map<string, WikiSummary>(); // key: "lang:pageid"
 
-    try {
-      const sumRes = await fetch(sumUrl.toString());
-      if (sumRes.ok) {
-        const sumData = await sumRes.json() as { query?: { pages?: Record<string, WikiPage> } };
-        for (const page of Object.values(sumData.query?.pages ?? {})) {
-          summaries.set(page.pageid, page.extract ?? "");
+  const byLang: Record<WikiLang, WikiGeoItem[]> = { es: [], ca: [] };
+  for (const item of items) byLang[item.lang].push(item);
+
+  for (const [lang, langItems] of Object.entries(byLang) as [WikiLang, WikiGeoItem[]][]) {
+    for (let i = 0; i < langItems.length; i += 100) {
+      const ids = langItems.slice(i, i + 100).map((p) => p.pageid).join("|");
+      const sumUrl = new URL(`https://${lang}.wikipedia.org/w/api.php`);
+      sumUrl.searchParams.set("action", "query");
+      sumUrl.searchParams.set("pageids", ids);
+      sumUrl.searchParams.set("prop", "extracts|pageimages");
+      sumUrl.searchParams.set("exintro", "1");
+      sumUrl.searchParams.set("explaintext", "1");
+      sumUrl.searchParams.set("exsentences", "3");
+      sumUrl.searchParams.set("pithumbsize", "400");
+      sumUrl.searchParams.set("format", "json");
+
+      try {
+        const res = await fetch(sumUrl.toString());
+        if (res.ok) {
+          const data = await res.json() as { query?: { pages?: Record<string, WikiPage> } };
+          for (const page of Object.values(data.query?.pages ?? {})) {
+            summaries.set(`${lang}:${page.pageid}`, {
+              extract: page.extract ?? "",
+              image: page.thumbnail?.source ?? "",
+            });
+          }
         }
+      } catch {
+        // partial failure — continue
       }
-    } catch {
-      // partial failure — continue with empty summaries for this batch
     }
   }
 
   // Step 4: build GeoJSON
-  const features: GeoJSON.Feature[] = items.map((item) => ({
-    type: "Feature",
-    id: item.pageid,
-    geometry: { type: "Point", coordinates: [item.lon, item.lat] },
-    properties: {
-      _layerId: "wikipedia" as LayerId,
-      _osmId: `wikipedia/${item.pageid}`,
-      name: item.title,
-      summary: summaries.get(item.pageid) ?? "",
-      url: `https://es.wikipedia.org/wiki/${encodeURIComponent(item.title.replace(/ /g, "_"))}`,
+  const features: GeoJSON.Feature[] = items.map((item) => {
+    const key = `${item.lang}:${item.pageid}`;
+    const info = summaries.get(key);
+    return {
+      type: "Feature",
+      id: item.pageid,
+      geometry: { type: "Point", coordinates: [item.lon, item.lat] },
+      properties: {
+        _layerId: "wikipedia" as LayerId,
+        _osmId: `wikipedia/${item.pageid}`,
+        name: item.title,
+        summary: info?.extract ?? "",
+        image: info?.image ?? "",
+        url: `https://${item.lang}.wikipedia.org/wiki/${encodeURIComponent(item.title.replace(/ /g, "_"))}`,
+        lang: item.lang,
+      },
+    };
+  });
+
+  return { type: "FeatureCollection", features };
+}
+
+// ─── Wikidata fetch ───────────────────────────────────────────────────────────
+
+const WIKIDATA_SPARQL = "https://query.wikidata.org/sparql";
+
+const WIKIDATA_TYPES: Record<string, string> = {
+  Q23413:   "Castillo",
+  Q16970:   "Iglesia",
+  Q2977:    "Catedral",
+  Q33506:   "Museo",
+  Q4989906: "Monumento",
+  Q839954:  "Yacimiento arqueológico",
+  Q570116:  "Atracción turística",
+  Q12280:   "Puente",
+  Q1081138: "Ermita",
+};
+
+interface WikidataBinding {
+  item:      { value: string };
+  itemLabel: { value: string };
+  lat:       { value: string };
+  lon:       { value: string };
+  type:      { value: string };
+  image?:    { value: string };
+}
+
+async function fetchWikidata(): Promise<GeoJSON.FeatureCollection> {
+  const typeValues = Object.keys(WIKIDATA_TYPES).map((q) => `wd:${q}`).join(" ");
+  const query = `
+    SELECT ?item ?itemLabel ?lat ?lon ?type ?image WHERE {
+      SERVICE wikibase:box {
+        ?item wdt:P625 ?coords.
+        bd:serviceParam wikibase:cornerSouthWest "Point(-0.7 39.7)"^^geo:wktLiteral.
+        bd:serviceParam wikibase:cornerNorthEast "Point(0.6 40.9)"^^geo:wktLiteral.
+      }
+      VALUES ?type { ${typeValues} }
+      ?item wdt:P31 ?type.
+      BIND(geof:latitude(?coords) AS ?lat)
+      BIND(geof:longitude(?coords) AS ?lon)
+      OPTIONAL { ?item wdt:P18 ?image. }
+      SERVICE wikibase:label { bd:serviceParam wikibase:language "es,ca,en". }
+    }
+    LIMIT 500
+  `;
+
+  const url = new URL(WIKIDATA_SPARQL);
+  url.searchParams.set("query", query);
+  url.searchParams.set("format", "json");
+
+  const res = await fetch(url.toString(), {
+    headers: {
+      "User-Agent": "CamperMap/1.0 (https://camper-map.vercel.app)",
+      "Accept": "application/sparql-results+json",
     },
-  }));
+  });
+  if (!res.ok) throw new Error(`Wikidata SPARQL HTTP ${res.status}`);
+
+  const data = await res.json() as { results: { bindings: WikidataBinding[] } };
+  const bindings = data.results.bindings;
+
+  // deduplicate: a place can match multiple types — keep first match
+  const seenItems = new Set<string>();
+  const features: GeoJSON.Feature[] = [];
+
+  for (const b of bindings) {
+    const itemUrl = b.item.value;
+    if (seenItems.has(itemUrl)) continue;
+    seenItems.add(itemUrl);
+
+    const lat = parseFloat(b.lat.value);
+    const lon = parseFloat(b.lon.value);
+    if (isNaN(lat) || isNaN(lon)) continue;
+
+    const typeQid = b.type.value.split("/").pop() ?? "";
+    const typeLabel = WIKIDATA_TYPES[typeQid] ?? "Lugar de interés";
+
+    // Wikidata image URL: already a full Wikimedia Commons URL
+    // Add width param for thumbnails
+    const rawImage = b.image?.value ?? "";
+    const image = rawImage
+      ? rawImage + (rawImage.includes("?") ? "&" : "?") + "width=400"
+      : "";
+
+    const qid = itemUrl.split("/").pop() ?? "";
+    features.push({
+      type: "Feature",
+      geometry: { type: "Point", coordinates: [lon, lat] },
+      properties: {
+        _layerId: "wikidata" as LayerId,
+        _osmId: `wikidata/${qid}`,
+        name: b.itemLabel.value,
+        type: typeLabel,
+        image,
+        url: itemUrl,
+      },
+    });
+  }
 
   return { type: "FeatureCollection", features };
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
-export const FUNCTIONAL_LAYER_IDS: LayerId[] = ["camping", "agua", "rutas", "wc", "wikipedia", "ivan"];
+export const FUNCTIONAL_LAYER_IDS: LayerId[] = ["camping", "agua", "rutas", "wc", "wikipedia", "wikidata", "ivan"];
 
 export async function fetchLayerFromOverpass(layerId: LayerId): Promise<LayerResponse> {
   let data: GeoJSON.FeatureCollection;
@@ -351,6 +494,7 @@ export async function fetchLayerFromOverpass(layerId: LayerId): Promise<LayerRes
     case "rutas":      data = await fetchRutas(); break;
     case "wc":         data = await fetchWC(); break;
     case "wikipedia":  data = await fetchWikipedia(); break;
+    case "wikidata":   data = await fetchWikidata(); break;
     case "ivan":       data = await fetchIvan(); break;
     default:
       data = EMPTY;

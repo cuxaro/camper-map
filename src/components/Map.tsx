@@ -19,6 +19,7 @@ const LAYER_COLORS: Record<LayerId, string> = {
   eventos:    "#f43f5e",
   wc:         "#64748b",
   ivan:       "#ef4444",
+  wikidata:   "#0ea5e9",
 };
 
 const CAMPING_EMOJI: Record<string, string> = {
@@ -40,6 +41,16 @@ function makeIcon(layerId: LayerId, props: Record<string, unknown>): L.DivIcon {
     case "wikipedia":  emoji = "📖"; break;
     case "wc":         emoji = "🚽"; break;
     case "ivan":       emoji = props.type === "cementerio" ? "🪦" : "📚"; break;
+    case "wikidata": {
+      const t = String(props.type ?? "");
+      if (t === "Castillo") emoji = "🏰";
+      else if (t === "Iglesia" || t === "Catedral" || t === "Ermita") emoji = "⛪";
+      else if (t === "Museo") emoji = "🏛";
+      else if (t === "Yacimiento arqueológico") emoji = "🏺";
+      else if (t === "Puente") emoji = "🌉";
+      else emoji = "🏛";
+      break;
+    }
     default: emoji = "📍";
   }
   return L.divIcon({
@@ -81,7 +92,7 @@ function LocateButton() {
 }
 
 const EMPTY_FC: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
-const POINT_LAYERS: LayerId[] = ["camping", "agua", "eventos", "wikipedia", "wc", "ivan"];
+const POINT_LAYERS: LayerId[] = ["camping", "agua", "eventos", "wikipedia", "wikidata", "wc", "ivan"];
 
 export type MapData = Partial<Record<LayerId, GeoJSON.FeatureCollection>>;
 

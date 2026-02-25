@@ -163,11 +163,52 @@ function RutaDetail({ props }: { props: Props }) {
 function WikipediaDetail({ props }: { props: Props }) {
   return (
     <div className="space-y-3">
-      <p className="text-sm text-gray-600 leading-relaxed">{String(props.summary ?? "")}</p>
+      {!!props.image && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={String(props.image)}
+          alt={String(props.name ?? "")}
+          className="w-full h-44 object-cover rounded-xl"
+          onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+        />
+      )}
+      {!!props.summary && (
+        <p className="text-sm text-gray-600 leading-relaxed">{String(props.summary)}</p>
+      )}
+      <div className="flex items-center gap-3 flex-wrap">
+        {!!props.url && (
+          <a href={String(props.url)} target="_blank" rel="noopener noreferrer"
+            className="text-sm text-purple-600 font-medium">
+            Ver en Wikipedia →
+          </a>
+        )}
+        {props.lang === "ca" && (
+          <span className="text-xs bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full">Viquipèdia (ca)</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function WikidataDetail({ props }: { props: Props }) {
+  return (
+    <div className="space-y-3">
+      {!!props.image && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={String(props.image)}
+          alt={String(props.name ?? "")}
+          className="w-full h-44 object-cover rounded-xl"
+          onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+        />
+      )}
+      {!!props.type && (
+        <Tag color="blue">{String(props.type)}</Tag>
+      )}
       {!!props.url && (
         <a href={String(props.url)} target="_blank" rel="noopener noreferrer"
-          className="text-sm text-purple-600 font-medium">
-          Ver en Wikipedia →
+          className="text-sm text-sky-600 font-medium">
+          Ver en Wikidata →
         </a>
       )}
     </div>
@@ -234,6 +275,7 @@ const LAYER_ICON: Record<LayerId, string> = {
   clima: "🌤",
   wc: "🚽",
   ivan: "🎯",
+  wikidata: "🏛",
 };
 
 // ─── Main component ───────────────────────────────────────────────────────────
@@ -283,6 +325,7 @@ export default function BottomSheet({ feature, onClose }: BottomSheetProps) {
           {layerId === "agua" && <AguaDetail props={props} />}
           {layerId === "rutas" && <RutaDetail props={props} />}
           {layerId === "wikipedia" && <WikipediaDetail props={props} />}
+          {layerId === "wikidata" && <WikidataDetail props={props} />}
           {layerId === "ivan" && <IvanDetail props={props} />}
           {layerId === "eventos" && <EventoDetail props={props} />}
         </div>

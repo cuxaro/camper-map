@@ -2,11 +2,21 @@ export type LayerId =
   | "camping"
   | "rutas"
   | "wikipedia"
+  | "wikidata"
   | "clima"
   | "eventos"
   | "agua"
   | "wc"
   | "ivan";
+
+export type LayerGroup = "dormir" | "hacer" | "basicos" | "recomendaciones";
+
+export const LAYER_GROUPS: { id: LayerGroup; label: string }[] = [
+  { id: "dormir",          label: "🛏 Dónde dormir" },
+  { id: "hacer",           label: "🎒 Qué hacer" },
+  { id: "basicos",         label: "🔧 Básicos" },
+  { id: "recomendaciones", label: "⭐ Recomendaciones" },
+];
 
 export interface Layer {
   id: LayerId;
@@ -14,10 +24,11 @@ export interface Layer {
   description: string;
   icon: string;
   color: string;
-  enabled: boolean;   // default on/off
-  implemented: boolean; // false = coming soon, not interactive
+  enabled: boolean;
+  implemented: boolean;
   source: string;
-  comingSoon?: string; // short description of what's planned
+  group: LayerGroup;
+  comingSoon?: string;
 }
 
 export const LAYERS: Layer[] = [
@@ -30,6 +41,7 @@ export const LAYERS: Layer[] = [
     enabled: true,
     implemented: true,
     source: "OpenStreetMap",
+    group: "dormir",
   },
   {
     id: "rutas",
@@ -40,6 +52,29 @@ export const LAYERS: Layer[] = [
     enabled: true,
     implemented: true,
     source: "OpenStreetMap",
+    group: "hacer",
+  },
+  {
+    id: "wikipedia",
+    label: "Lugares de interés",
+    description: "POIs geolocalizados desde Wikipedia (es+ca)",
+    icon: "📖",
+    color: "#a855f7",
+    enabled: false,
+    implemented: true,
+    source: "Wikipedia (es/ca)",
+    group: "hacer",
+  },
+  {
+    id: "wikidata",
+    label: "Patrimonio",
+    description: "Castillos, iglesias, museos y monumentos",
+    icon: "🏛",
+    color: "#0ea5e9",
+    enabled: false,
+    implemented: true,
+    source: "Wikidata",
+    group: "hacer",
   },
   {
     id: "agua",
@@ -50,16 +85,29 @@ export const LAYERS: Layer[] = [
     enabled: false,
     implemented: true,
     source: "OpenStreetMap",
+    group: "basicos",
   },
   {
-    id: "wikipedia",
-    label: "Lugares de interés",
-    description: "POIs geolocalizados desde Wikipedia",
-    icon: "📖",
-    color: "#a855f7",
+    id: "wc",
+    label: "WC Públicos",
+    description: "Servicios higiénicos públicos",
+    icon: "🚽",
+    color: "#64748b",
     enabled: false,
     implemented: true,
-    source: "Wikipedia (es)",
+    source: "OpenStreetMap",
+    group: "basicos",
+  },
+  {
+    id: "ivan",
+    label: "Recomendación Iván",
+    description: "Cementerios y bibliotecas — pernocta tranquila garantizada",
+    icon: "🎯",
+    color: "#ef4444",
+    enabled: false,
+    implemented: true,
+    source: "OpenStreetMap",
+    group: "recomendaciones",
   },
   {
     id: "clima",
@@ -70,6 +118,7 @@ export const LAYERS: Layer[] = [
     enabled: false,
     implemented: false,
     source: "OpenWeatherMap",
+    group: "hacer",
     comingSoon: "Sprint 3",
   },
   {
@@ -81,26 +130,7 @@ export const LAYERS: Layer[] = [
     enabled: false,
     implemented: false,
     source: "Mock data",
+    group: "hacer",
     comingSoon: "Sprint 4",
-  },
-  {
-    id: "wc",
-    label: "WC Públicos",
-    description: "Servicios higiénicos públicos",
-    icon: "🚽",
-    color: "#64748b",
-    enabled: false,
-    implemented: true,
-    source: "OpenStreetMap",
-  },
-  {
-    id: "ivan",
-    label: "Recomendación Iván",
-    description: "Cementerios y bibliotecas — pernocta tranquila garantizada",
-    icon: "🎯",
-    color: "#ef4444",
-    enabled: false,
-    implemented: true,
-    source: "OpenStreetMap",
   },
 ];
