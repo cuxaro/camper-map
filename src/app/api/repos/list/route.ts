@@ -7,7 +7,7 @@ export async function GET() {
   }
 
   try {
-    const { blobs } = await list({ prefix: "repos/" });
+    const { blobs } = await list({ prefix: "repos/", token: process.env.BLOB_READ_WRITE_TOKEN });
 
     const metas = await Promise.all(
       blobs.map(async (blob): Promise<RepoMeta | null> => {

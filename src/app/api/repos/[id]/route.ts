@@ -12,10 +12,13 @@ export async function GET(
   }
 
   try {
-    const { blobs } = await list({ prefix: `repos/${id}.json` });
+    const token = process.env.BLOB_READ_WRITE_TOKEN;
+    const { blobs } = await list({ prefix: `repos/${id}.json`, token });
     if (blobs.length === 0) return Response.json({ error: "No encontrado" }, { status: 404 });
 
-    const res = await fetch(blobs[0].url);
+    const res = await fetch(blobs[0].url, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
     if (!res.ok) return Response.json({ error: "Error al leer el blob" }, { status: 500 });
 
     const payload = await res.json() as RepoPayload;
@@ -36,7 +39,7 @@ export async function DELETE(
   }
 
   try {
-    const { blobs } = await list({ prefix: `repos/${id}.json` });
+    const { blobs } = await list({ prefix: `repos/${id}.json`, token: process.env.BLOB_READ_WRITE_TOKEN });
     if (blobs.length === 0) return Response.json({ error: "No encontrado" }, { status: 404 });
 
     await del(blobs[0].url);

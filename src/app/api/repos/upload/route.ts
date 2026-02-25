@@ -62,10 +62,16 @@ export async function POST(req: NextRequest) {
     data: geojson,
   };
 
-  await put(`repos/${id}.json`, JSON.stringify(payload), {
-    access: "public",
-    contentType: "application/json",
-  });
+  try {
+    await put(`repos/${id}.json`, JSON.stringify(payload), {
+      access: "public",
+      contentType: "application/json",
+      token: process.env.BLOB_READ_WRITE_TOKEN,
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return Response.json({ error: `Error al guardar en Blob: ${msg}` }, { status: 500 });
+  }
 
   return Response.json({ id, count: valid.length, skipped });
 }
