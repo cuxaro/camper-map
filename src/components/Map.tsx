@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { MapContainer, TileLayer, Marker, Polyline, ZoomControl, useMap, useMapEvents } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, GeoJSON, ZoomControl, useMap, useMapEvents } from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-cluster";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -34,6 +34,7 @@ function makeIcon(layerId: LayerId, props: Record<string, unknown>): L.DivIcon {
   let emoji: string;
   switch (layerId) {
     case "camping": emoji = CAMPING_EMOJI[String(props.type ?? "")] ?? "⛺"; break;
+    case "rutas":      emoji = "🥾"; break;
     case "agua":       emoji = props.potable ? "💧" : "🚱"; break;
     case "eventos":    emoji = "🎉"; break;
     case "wikipedia":  emoji = "📖"; break;
@@ -118,11 +119,12 @@ export type MapData = Partial<Record<LayerId, GeoJSON.FeatureCollection>>;
 interface MapProps {
   enabledLayers: Set<LayerId>;
   data: MapData;
+  selectedFeature: GeoJSON.Feature | null;
   onFeatureClick: (feature: GeoJSON.Feature) => void;
   onBoundsChange: (bbox: string, zoom: number) => void;
 }
 
-export default function Map({ enabledLayers, data, onFeatureClick, onBoundsChange }: MapProps) {
+export default function Map({ enabledLayers, data, selectedFeature, onFeatureClick, onBoundsChange }: MapProps) {
   return (
     <MapContainer
       center={CASTELLON_CENTER}
@@ -161,25 +163,34 @@ export default function Map({ enabledLayers, data, onFeatureClick, onBoundsChang
         );
       })}
 
-      {/* Rutas: polylines */}
-      {enabledLayers.has("rutas") &&
-        (data.rutas ?? EMPTY_FC).features.map((feature) => {
-          if (feature.geometry.type !== "LineString") return null;
-          const props = (feature.properties ?? {}) as Record<string, unknown>;
-          const positions = feature.geometry.coordinates.map(
-            ([lon, lat]) => [lat, lon] as [number, number]
-          );
-          return (
-            <Polyline
-              key={String(props._osmId ?? Math.random())}
-              positions={positions}
-              color={LAYER_COLORS.rutas}
-              weight={2.5}
-              opacity={0.85}
-              eventHandlers={{ click: () => onFeatureClick(feature) }}
-            />
-          );
-        })}
+      {/* Rutas: trailhead marker at start of each route */}
+      {enabledLayers.has("rutas") && (
+        <MarkerClusterGroup key="rutas" chunkedLoading maxClusterRadius={50} disableClusteringAtZoom={13}>
+          {(data.rutas ?? EMPTY_FC).features.map((feature) => {
+            if (feature.geometry.type !== "LineString") return null;
+            const [lon, lat] = feature.geometry.coordinates[0];
+            const props = (feature.properties ?? {}) as Record<string, unknown>;
+            return (
+              <Marker
+                key={String(props._osmId ?? `${lat},${lon}`)}
+                position={[lat, lon]}
+                icon={makeIcon("rutas", props)}
+                eventHandlers={{ click: () => onFeatureClick(feature) }}
+              />
+            );
+          })}
+        </MarkerClusterGroup>
+      )}
+
+      {/* Active route line — only shown when a ruta is selected */}
+      {selectedFeature?.properties?._layerId === "rutas" &&
+        selectedFeature.geometry.type === "LineString" && (
+          <GeoJSON
+            key={`active-ruta-${String(selectedFeature.properties._osmId)}`}
+            data={{ type: "FeatureCollection", features: [selectedFeature] } as GeoJSON.FeatureCollection}
+            style={{ color: LAYER_COLORS.rutas, weight: 3, opacity: 0.9 }}
+          />
+        )}
     </MapContainer>
   );
 }

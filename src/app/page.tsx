@@ -60,8 +60,8 @@ export default function HomePage() {
       loadLayer("agua",       (force) => fetchAgua(bbox, force));
       loadLayer("wc",         (force) => fetchWC(bbox, force));
       loadLayer("biblioteca", (force) => fetchBiblioteca(bbox, force));
-      // Rutas only at zoom ≥ 11 — bbox at lower zooms is too large for Overpass
-      if (zoom >= 11) loadLayer("rutas", (force) => fetchRutas(bbox, force));
+      // Rutas only at zoom ≥ 13 — lower zooms return too many ways and collapse the renderer
+      if (zoom >= 13) loadLayer("rutas", (force) => fetchRutas(bbox, force));
     }, 600);
   }, [loadLayer]);
 
@@ -122,6 +122,7 @@ export default function HomePage() {
         <Map
           enabledLayers={enabledLayers}
           data={data}
+          selectedFeature={selectedFeature}
           onFeatureClick={handleFeatureClick}
           onBoundsChange={handleBoundsChange}
         />
