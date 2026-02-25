@@ -1,40 +1,61 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import dynamic from "next/dynamic";
 import LayerPanel from "@/components/LayerPanel";
 import BottomSheet from "@/components/BottomSheet";
+import { usePersistedLayers } from "@/hooks/usePersistedLayers";
+import { fetchCamping, fetchAgua, fetchRutas } from "@/lib/overpass";
+import { eventosData, wikipediaData } from "@/data/mock";
 import type { LayerId } from "@/types/layers";
 import { LAYERS } from "@/types/layers";
+import type { MapData } from "@/components/Map";
 
-// MapLibre needs browser APIs — load client-side only
 const Map = dynamic(() => import("@/components/Map"), { ssr: false });
 
-const initialLayers = new Set<LayerId>(
-  LAYERS.filter((l) => l.enabled).map((l) => l.id)
-);
-
 export default function HomePage() {
+  const { enabledLayers, toggleLayer } = usePersistedLayers();
   const [layerPanelOpen, setLayerPanelOpen] = useState(false);
-  const [enabledLayers, setEnabledLayers] = useState<Set<LayerId>>(initialLayers);
   const [selectedFeature, setSelectedFeature] = useState<GeoJSON.Feature | null>(null);
+  const [data, setData] = useState<MapData>({
+    eventos: eventosData,
+    wikipedia: wikipediaData,
+  });
+  const [loadingLayers, setLoadingLayers] = useState<Set<LayerId>>(
+    new Set(["camping", "agua", "rutas"])
+  );
 
-  const toggleLayer = useCallback((id: LayerId) => {
-    setEnabledLayers((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
+  // Fetch OSM data on mount
+  useEffect(() => {
+    async function load(
+      id: LayerId,
+      fetcher: () => Promise<GeoJSON.FeatureCollection>
+    ) {
+      try {
+        const fc = await fetcher();
+        setData((prev) => ({ ...prev, [id]: fc }));
+      } catch {
+        // fetcher handles errors internally, returns empty FC
+      } finally {
+        setLoadingLayers((prev) => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
       }
-      return next;
-    });
+    }
+
+    load("camping", fetchCamping);
+    load("agua", fetchAgua);
+    load("rutas", fetchRutas);
   }, []);
 
   const handleFeatureClick = useCallback((feature: GeoJSON.Feature) => {
     setSelectedFeature(feature);
     setLayerPanelOpen(false);
   }, []);
+
+  const activeLayers = LAYERS.filter((l) => enabledLayers.has(l.id));
 
   return (
     <div className="fixed inset-0 flex flex-col bg-gray-900">
@@ -64,37 +85,57 @@ export default function HomePage() {
       <div className="flex-1">
         <Map
           enabledLayers={enabledLayers}
+          data={data}
           onFeatureClick={handleFeatureClick}
         />
       </div>
 
-      {/* Legend pills — bottom left, above controls */}
-      {!selectedFeature && (
+      {/* Loading indicator */}
+      {loadingLayers.size > 0 && (
+        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
+          <div className="bg-white/95 backdrop-blur rounded-full px-3 py-1.5 shadow-lg flex items-center gap-2">
+            <svg className="w-3 h-3 animate-spin text-green-500" viewBox="0 0 24 24" fill="none">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+            </svg>
+            <span className="text-xs text-gray-600 font-medium">
+              Cargando datos OSM…
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Legend pills */}
+      {!selectedFeature && activeLayers.length > 0 && (
         <div className="absolute bottom-6 left-3 flex flex-col gap-1.5 pointer-events-none z-10">
-          {LAYERS.filter((l) => enabledLayers.has(l.id)).map((layer) => (
+          {activeLayers.map((layer) => (
             <div
               key={layer.id}
               className="flex items-center gap-1.5 bg-white/90 backdrop-blur rounded-full px-2 py-1 shadow text-xs font-medium text-gray-700"
             >
-              <span
-                className="w-2 h-2 rounded-full shrink-0"
-                style={{ backgroundColor: layer.color }}
-              />
+              <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: layer.color }} />
               {layer.icon} {layer.label}
+              {loadingLayers.has(layer.id) && (
+                <svg className="w-2.5 h-2.5 animate-spin text-gray-400 ml-0.5" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                </svg>
+              )}
             </div>
           ))}
         </div>
       )}
 
-      {/* Layer panel drawer */}
+      {/* Layer panel */}
       <LayerPanel
         open={layerPanelOpen}
         enabledLayers={enabledLayers}
         onToggle={toggleLayer}
         onClose={() => setLayerPanelOpen(false)}
+        loadingLayers={loadingLayers}
       />
 
-      {/* Bottom sheet detail */}
+      {/* Bottom sheet */}
       <BottomSheet
         feature={selectedFeature}
         onClose={() => setSelectedFeature(null)}

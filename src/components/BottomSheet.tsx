@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import type { LayerId } from "@/types/layers";
 
 interface BottomSheetProps {
   feature: GeoJSON.Feature | null;
@@ -9,23 +10,58 @@ interface BottomSheetProps {
 
 type Props = Record<string, unknown>;
 
-function renderStars(rating: number) {
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function Stars({ rating }: { rating: number }) {
   const full = Math.floor(rating);
-  const partial = rating % 1 >= 0.5;
+  const half = rating % 1 >= 0.5;
   return (
     <span className="text-amber-400 text-sm">
       {"★".repeat(full)}
-      {partial ? "½" : ""}
-      <span className="text-gray-300">{"★".repeat(5 - full - (partial ? 1 : 0))}</span>
+      {half ? "½" : ""}
+      <span className="text-gray-300">{"★".repeat(5 - full - (half ? 1 : 0))}</span>
     </span>
   );
 }
 
+function Tag({ children, color = "gray" }: { children: React.ReactNode; color?: string }) {
+  const colors: Record<string, string> = {
+    gray: "bg-gray-100 text-gray-500",
+    green: "bg-green-100 text-green-700",
+    blue: "bg-blue-100 text-blue-600",
+    orange: "bg-orange-100 text-orange-600",
+    red: "bg-red-100 text-red-600",
+  };
+  return (
+    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${colors[color] ?? colors.gray}`}>
+      {children}
+    </span>
+  );
+}
+
+function OsmLink({ osmId }: { osmId: string }) {
+  if (!osmId) return null;
+  return (
+    <a
+      href={`https://www.openstreetmap.org/${osmId}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="text-xs text-gray-400 underline"
+    >
+      Ver en OSM
+    </a>
+  );
+}
+
+// ─── Detail components ────────────────────────────────────────────────────────
+
 function CampingDetail({ props }: { props: Props }) {
   const typeLabel: Record<string, string> = {
-    camping: "Camping oficial",
+    camping: "Camping",
+    area: "Área camper",
     bivouac: "Bivouac libre",
-    area: "Área de descanso",
+    refugio: "Refugio",
+    picnic: "Área picnic",
   };
 
   const rating = typeof props.rating === "number" ? props.rating : null;
@@ -34,24 +70,21 @@ function CampingDetail({ props }: { props: Props }) {
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-xs font-medium bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
-          {typeLabel[String(props.type)] ?? String(props.type)}
-        </span>
-        {!!props.verified && (
-          <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
-            ✓ Verificado
-          </span>
-        )}
+        <Tag color="green">{typeLabel[String(props.type ?? "")] ?? "Camping"}</Tag>
+        {!!props.verified && <Tag color="blue">✓ Verificado</Tag>}
+        {!!props.fee && <Tag color="orange">💶 De pago</Tag>}
       </div>
 
       {rating !== null && (
         <div className="flex items-center gap-2">
-          {renderStars(rating)}
+          <Stars rating={rating} />
           <span className="text-sm text-gray-500">{rating.toFixed(1)}</span>
         </div>
       )}
 
-      <p className="text-sm text-gray-600 leading-relaxed">{String(props.description ?? "")}</p>
+      {!!props.description && (
+        <p className="text-sm text-gray-600 leading-relaxed">{String(props.description)}</p>
+      )}
 
       <div className="flex gap-2 flex-wrap">
         <span className={`text-xs px-2 py-1 rounded-full ${props.water ? "bg-blue-100 text-blue-600" : "bg-gray-100 text-gray-400"}`}>
@@ -65,60 +98,19 @@ function CampingDetail({ props }: { props: Props }) {
       {tags.length > 0 && (
         <div className="flex gap-1.5 flex-wrap">
           {tags.map((tag) => (
-            <span key={tag} className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">
-              #{tag}
-            </span>
+            <Tag key={tag}>#{tag}</Tag>
           ))}
         </div>
       )}
-    </div>
-  );
-}
 
-function WikipediaDetail({ props }: { props: Props }) {
-  return (
-    <div className="space-y-3">
-      <p className="text-sm text-gray-600 leading-relaxed">{String(props.summary ?? "")}</p>
-      {!!props.url && (
-        <a
-          href={String(props.url)}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 text-sm text-purple-600 font-medium"
-        >
-          Ver en Wikipedia →
+      {!!props.website && (
+        <a href={String(props.website)} target="_blank" rel="noopener noreferrer"
+          className="text-sm text-green-600 font-medium">
+          🌐 Web →
         </a>
       )}
-    </div>
-  );
-}
 
-function EventoDetail({ props }: { props: Props }) {
-  const categoryLabel: Record<string, string> = {
-    fiesta: "🎊 Fiesta local",
-    mercado: "🛒 Mercado",
-    musica: "🎵 Música",
-  };
-
-  const fecha = props.date
-    ? new Date(String(props.date)).toLocaleDateString("es-ES", {
-        day: "numeric",
-        month: "long",
-        year: "numeric",
-      })
-    : null;
-
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-xs font-medium bg-red-100 text-red-600 px-2 py-0.5 rounded-full">
-          {categoryLabel[String(props.category)] ?? String(props.category)}
-        </span>
-        {fecha && (
-          <span className="text-xs text-gray-500">📅 {fecha}</span>
-        )}
-      </div>
-      <p className="text-sm text-gray-600 leading-relaxed">{String(props.description ?? "")}</p>
+      <OsmLink osmId={String(props._osmId ?? "")} />
     </div>
   );
 }
@@ -134,40 +126,108 @@ function AguaDetail({ props }: { props: Props }) {
           {props.permanent ? "✓ Permanente" : "⚠ Temporal"}
         </span>
       </div>
+      {!!props.flow && (
+        <p className="text-sm text-gray-500">Caudal: {String(props.flow)}</p>
+      )}
+      <OsmLink osmId={String(props._osmId ?? "")} />
     </div>
   );
 }
+
+function RutaDetail({ props }: { props: Props }) {
+  const sacLabel: Record<string, string> = {
+    hiking: "🟢 Senderismo fácil",
+    mountain_hiking: "🟡 Montaña media",
+    demanding_mountain_hiking: "🟠 Montaña exigente",
+    alpine_hiking: "🔴 Alpino",
+    demanding_alpine_hiking: "⚫ Alpino exigente",
+  };
+
+  return (
+    <div className="space-y-3">
+      {!!props.sac_scale && (
+        <p className="text-sm font-medium">{sacLabel[String(props.sac_scale)] ?? String(props.sac_scale)}</p>
+      )}
+      {!!props.description && (
+        <p className="text-sm text-gray-600 leading-relaxed">{String(props.description)}</p>
+      )}
+      <div className="flex gap-2 flex-wrap">
+        {!!props.surface && <Tag>{String(props.surface)}</Tag>}
+        {!!props.distance && <Tag color="green">📏 {String(props.distance)}</Tag>}
+      </div>
+      <OsmLink osmId={String(props._osmId ?? "")} />
+    </div>
+  );
+}
+
+function WikipediaDetail({ props }: { props: Props }) {
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-gray-600 leading-relaxed">{String(props.summary ?? "")}</p>
+      {!!props.url && (
+        <a href={String(props.url)} target="_blank" rel="noopener noreferrer"
+          className="text-sm text-purple-600 font-medium">
+          Ver en Wikipedia →
+        </a>
+      )}
+    </div>
+  );
+}
+
+function EventoDetail({ props }: { props: Props }) {
+  const catLabel: Record<string, string> = {
+    fiesta: "🎊 Fiesta local",
+    mercado: "🛒 Mercado",
+    musica: "🎵 Música",
+  };
+
+  const fecha = props.date
+    ? new Date(String(props.date)).toLocaleDateString("es-ES", {
+        day: "numeric", month: "long", year: "numeric",
+      })
+    : null;
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2 flex-wrap">
+        <Tag color="red">{catLabel[String(props.category ?? "")] ?? String(props.category ?? "")}</Tag>
+        {fecha && <span className="text-xs text-gray-500">📅 {fecha}</span>}
+      </div>
+      <p className="text-sm text-gray-600 leading-relaxed">{String(props.description ?? "")}</p>
+    </div>
+  );
+}
+
+// ─── Icon + component mapping by _layerId ─────────────────────────────────────
+
+const LAYER_ICON: Record<LayerId, string> = {
+  camping: "⛺",
+  agua: "💧",
+  rutas: "🥾",
+  wikipedia: "📖",
+  eventos: "🎉",
+  clima: "🌤",
+};
+
+// ─── Main component ───────────────────────────────────────────────────────────
 
 export default function BottomSheet({ feature, onClose }: BottomSheetProps) {
   const sheetRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (feature && sheetRef.current) {
-      sheetRef.current.scrollTop = 0;
-    }
+    if (feature) sheetRef.current?.scrollTo(0, 0);
   }, [feature]);
 
   if (!feature) return null;
 
   const props = (feature.properties ?? {}) as Props;
-  const id = String(props.id ?? "");
-  const source = id.charAt(0);
-
-  const iconMap: Record<string, string> = {
-    c: "⛺",
-    a: "💧",
-    e: "🎉",
-    w: "📖",
-  };
-
-  const icon = iconMap[source] ?? "📍";
+  const layerId = String(props._layerId ?? "") as LayerId;
+  const icon = LAYER_ICON[layerId] ?? "📍";
 
   return (
     <>
-      {/* Backdrop */}
       <div className="fixed inset-0 z-10" onClick={onClose} />
 
-      {/* Sheet */}
       <div className="fixed bottom-0 left-0 right-0 z-20 bg-white rounded-t-2xl shadow-2xl max-h-[65vh] flex flex-col animate-slide-up">
         {/* Handle */}
         <div className="flex justify-center pt-3 pb-1 shrink-0">
@@ -178,8 +238,8 @@ export default function BottomSheet({ feature, onClose }: BottomSheetProps) {
         <div className="flex items-start justify-between px-4 pb-3 pt-2 shrink-0 border-b border-gray-100">
           <div className="flex items-center gap-2 flex-1 min-w-0">
             <span className="text-2xl">{icon}</span>
-            <h2 className="font-bold text-gray-900 text-base leading-tight">
-              {String(props.name ?? "")}
+            <h2 className="font-bold text-gray-900 text-base leading-tight truncate">
+              {String(props.name ?? "Sin nombre")}
             </h2>
           </div>
           <button
@@ -192,10 +252,11 @@ export default function BottomSheet({ feature, onClose }: BottomSheetProps) {
 
         {/* Content */}
         <div ref={sheetRef} className="overflow-y-auto px-4 py-4 flex-1">
-          {source === "c" && <CampingDetail props={props} />}
-          {source === "w" && <WikipediaDetail props={props} />}
-          {source === "e" && <EventoDetail props={props} />}
-          {source === "a" && <AguaDetail props={props} />}
+          {layerId === "camping" && <CampingDetail props={props} />}
+          {layerId === "agua" && <AguaDetail props={props} />}
+          {layerId === "rutas" && <RutaDetail props={props} />}
+          {layerId === "wikipedia" && <WikipediaDetail props={props} />}
+          {layerId === "eventos" && <EventoDetail props={props} />}
         </div>
       </div>
     </>
